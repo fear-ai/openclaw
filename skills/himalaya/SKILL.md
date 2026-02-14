@@ -209,7 +209,7 @@ himalaya account list
 Use a specific account:
 
 ```bash
-himalaya --account work envelope list
+himalaya envelope list -a work
 ```
 
 ## Attachments
