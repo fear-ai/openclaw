@@ -21,6 +21,7 @@ AUTO_DETECT_SIGNING=1
 GATEWAY_WAIT_SECONDS="${OPENCLAW_GATEWAY_WAIT_SECONDS:-0}"
 LAUNCHAGENT_DISABLE_MARKER="${HOME}/.openclaw/disable-launchagent"
 ATTACH_ONLY=1
+QUIET="${OPENCLAW_QUIET:-0}"
 
 log()  { printf '%s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -94,6 +95,7 @@ for arg in "$@"; do
       log ""
       log "Env:"
       log "  OPENCLAW_GATEWAY_WAIT_SECONDS=0  Wait time before gateway port check (unsigned only)"
+      log "  OPENCLAW_QUIET=1                 Use quieter output for pnpm lifecycle steps"
       log ""
       log "Unsigned recovery:"
       log "  node openclaw.mjs daemon install --force --runtime node"
@@ -154,7 +156,11 @@ kill_all_openclaw
 stop_launch_agent
 
 # Bundle Gateway-hosted Canvas A2UI assets.
-run_step "bundle canvas a2ui" bash -lc "cd '${ROOT_DIR}' && pnpm canvas:a2ui:bundle"
+if [[ "${QUIET}" == "1" ]]; then
+  run_step "bundle canvas a2ui" bash -lc "cd '${ROOT_DIR}' && pnpm -s canvas:a2ui:bundle"
+else
+  run_step "bundle canvas a2ui" bash -lc "cd '${ROOT_DIR}' && pnpm canvas:a2ui:bundle"
+fi
 
 # 2) Rebuild into the same path the packager consumes (.build).
 run_step "clean build cache" bash -lc "cd '${ROOT_DIR}/apps/macos' && rm -rf .build .build-swift .swiftpm 2>/dev/null || true"
