@@ -6,11 +6,11 @@ This document captures current security posture, dominant threat classes, accept
 
 Document roles for this set are defined in `Claw.md` §5.
 
-## 2. Current Security Posture (2026-03-10)
+## 2. Current Security Posture (2026-04-04)
 
 ## 2.1. High-level posture
 
-From `2026.2.23` through `2026.3.8`, OpenClaw continued sustained hardening in:
+From `2026.2.23` through `2026.4.1`, OpenClaw continued sustained hardening in:
 
 - gateway/browser/proxy auth,
 - exec approvals and wrapper handling,
@@ -25,6 +25,8 @@ High-signal security-relevant additions in the current review window:
 - `2026.3.2` tightened loopback-only plaintext WebSocket behavior, added OpenAI Codex OAuth TLS prerequisite checks, and extended fail-closed hardening around node fetches, skills workspace boundaries, and safe writes.
 - `2026.3.7` continued remote-gateway and invalid-config hardening, added baseline HTTP security headers, and kept broader browser and websocket controls on a stricter footing.
 - `2026.3.8` added backup and verification commands that reduce upgrade and rollback risk, plus further hardening for browser redirect handling, `system.run`, and skill-download write boundaries.
+- `2026.3.31` materially tightened gateway auth, `trusted-proxy`, node-command exposure, plugin install scanning, plugin-auth route scoping, and request-scoped host execution boundaries.
+- `2026.4.1` continued the safer-runtime direction with task-surface additions and further auth/runtime recovery fixes, especially around OpenAI Codex OAuth refresh persistence and recovery.
 
 ## 2.2. Operational reality
 
@@ -128,7 +130,7 @@ Promotion between phases requires:
 - Advisory warning remains about node path under nvm in LaunchAgent command path (stability, not immediate exploit by itself).
 - OpenAI Codex OAuth reauth command path currently depends on configure/onboard model flow; plugin-login path is not valid in this workspace state.
 - User-agent/identity behavior differs by provider path and must be considered during provider-side enforcement investigations.
-- Security-significant upstream release notes have been reviewed through `2026.3.8`; deeper lane-by-lane policy refinement remains tracked in `Plan.md`.
+- Security-significant upstream release notes have been reviewed through `2026.4.1`; deeper lane-by-lane policy refinement remains tracked in `Plan.md`.
 
 ## 7. Practical Mitigations to Keep Enforced
 

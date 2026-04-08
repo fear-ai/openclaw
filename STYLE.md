@@ -27,6 +27,15 @@
 - No commentary or parenthetical remarks in headings and section title
 - Code blocks may specify language
 
+## Links and Sources
+
+- Do NOT append a trailing block of URLs by default
+- Add explicit source or documentation URLs only when:
+  - documentation was updated
+  - links were explicitly requested
+  - current online validation materially matters to the answer
+- Otherwise keep links inline only when useful, or omit them
+
 ## Security
 
 - Identify security issues in system operation, code or documentation

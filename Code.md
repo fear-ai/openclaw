@@ -8,13 +8,13 @@ Document roles for this set are defined in `Claw.md` §5.
 
 ## 2. Release and Runtime Snapshot
 
-Release state (verified 2026-03-10):
+Release state (verified 2026-04-04):
 
-- Local workspace version (`/Users/walter/Work/Claw/openclaw/package.json`): `2026.2.25`
-- Upstream latest stable (`pnpm release:status`, npm, GitHub release): `2026.3.8` dated `2026-03-09`
-- Homebrew cask current version: `2026.3.7`
-- Local status vs upstream: behind latest stable
-- Stock Homebrew lane currently trails the upstream repo lane by one stable release.
+- Local workspace version (`/Users/walter/Work/Claw/openclaw/package.json`): `2026.4.1`
+- Upstream latest stable release base: `2026.4.1`
+- Homebrew cask current version: `2026.3.28`
+- Installed Homebrew lane on this machine: `2026.3.7`
+- Local source lane is aligned to current stable; stock Homebrew remains behind.
 
 Runtime state (last verified 2026-03-06):
 
@@ -23,13 +23,14 @@ Runtime state (last verified 2026-03-06):
 
 ## 3. Release and Changelog Delta Notes
 
-## 3.1. 2026.2.25 -> 2026.3.8 trend
+## 3.1. 2026.2.25 -> 2026.4.1 trend
 
 - Release intake since `2026.2.25` continued to concentrate on safer upgrades, stricter gateway and browser boundaries, and current-model/provider compatibility.
 - High-signal themes for this workspace are:
   - update and rollback safety,
   - browser and remote gateway hardening,
-  - Codex and GPT-5.4 compatibility,
+  - Codex and current provider compatibility,
+  - task/runtime surfaces that keep more work inside the chat and gateway plane,
   - more explicit validation of config and auth prerequisites.
 
 ## 3.2. High-signal release items for current operations
@@ -47,15 +48,27 @@ Runtime state (last verified 2026-03-06):
   - `browser.relayBindHost` for WSL2 and other cross-namespace relay setups,
   - `openai-codex/gpt-5.4` transport normalization and corrected token-window limits,
   - additional hardening for SSRF redirect chains, `system.run`, and skill-download write boundaries.
+- `2026.3.31`:
+  - stricter `trusted-proxy` and local-direct auth handling,
+  - node commands gated behind approved node pairing,
+  - plugin install scan failures now fail closed by default,
+  - tighter plugin-auth and webhook route scoping.
+- `2026.4.1`:
+  - chat-native `/tasks`,
+  - bundled SearXNG web search provider,
+  - Bedrock Guardrails support,
+  - OpenAI Codex OAuth refresh-token persistence fixes and related runtime/auth recovery work.
 
 ## 3.3. Upgrade target conclusion
 
-- Repo lane target: `2026.3.8`.
-- Stock Homebrew lane target: `2026.3.7` until the cask catches up.
-- Branch preservation matters more than using `openclaw update` here:
-  - `feat/more_mail` is `ahead 21 / behind 7` vs `upstream/main`,
-  - `ai_email` is `ahead 21 / behind 23` vs `upstream/main`.
-- Because `openclaw update` requires a clean worktree and is built around channel or tag switching, manual `fetch` + `rebase` is the correct intake path for these two long-lived branches.
+- Repo lane target is already met: `feat/more_mail` now sits on `v2026.4.1`.
+- Current local commit stack over `v2026.4.1` is:
+  - `fix(skill): himalaya account flag is -a not --account`
+  - `Initial Anthropic relate patches`
+  - `show releases and QUIET`
+  - `Ignore local Codex session dirs`
+- The docs lane is now `claw_emails`, a small project-doc branch based on `v2026.4.1`.
+- The remaining branch-maintenance task is remote reconciliation: `origin/feat/more_mail` still reflects the old ancestry and needs one intentional `push --force-with-lease` after review.
 
 ## 4. Verified Implementation Facts
 
@@ -167,23 +180,19 @@ openclaw gateway restart
 openclaw health
 ```
 
-Branch-safe upstream intake for the repo and docs branches:
-
-Clear local changes first in both repos; both branches are currently dirty, and neither `git rebase` nor `openclaw update` should be run against a dirty tree.
+Branch-safe stable-lane maintenance:
 
 ```bash
 git -C /Users/walter/Work/Claw/openclaw fetch upstream --tags
-git -C /Users/walter/Work/Claw/openclaw rebase upstream/main
+git -C /Users/walter/Work/Claw/openclaw rebase v2026.4.1
 pnpm -C /Users/walter/Work/Claw/openclaw install
 pnpm -C /Users/walter/Work/Claw/openclaw build
 pnpm -C /Users/walter/Work/Claw/openclaw ui:build
 pnpm -C /Users/walter/Work/Claw/openclaw openclaw --profile repo doctor
 git -C /Users/walter/Work/Claw/openclaw push --force-with-lease origin feat/more_mail
-
-git -C /Users/walter/Work/Claw/openclaw-docs fetch upstream --tags
-git -C /Users/walter/Work/Claw/openclaw-docs rebase upstream/main
-git -C /Users/walter/Work/Claw/openclaw-docs push --force-with-lease origin ai_email
 ```
+
+Docs-lane maintenance should stay separate: keep `claw_emails` as the small project-doc branch on top of the chosen stable release base rather than replaying the retired `ai_email` history.
 
 Codex OAuth reauth (current reliable path):
 
@@ -207,7 +216,7 @@ pnpm -C /Users/walter/Work/Claw/openclaw openclaw --profile repo gateway start
 Official:
 
 - OpenClaw stable release:
-  - `https://github.com/openclaw/openclaw/releases/tag/v2026.3.8`
+  - `https://github.com/openclaw/openclaw/releases/tag/v2026.4.1`
 - OpenClaw updating guide:
   - `https://docs.openclaw.ai/install/updating`
 - OpenClaw update CLI reference:
@@ -227,5 +236,5 @@ Community evidence (informational, not policy authority):
 ## 7. Known Limitations
 
 - `node_modules/@mariozechner/pi-ai` behavior is dependency-state dependent; re-check after dependency updates.
-- Local workspace remains behind upstream (`2026.2.25` vs `2026.3.8`), and the Homebrew stock lane remains one stable release behind the repo lane.
+- Local source workspace is now on the current stable release base, but the stock Homebrew installation on this machine still trails both current npm and current Homebrew cask metadata.
 - `models auth login --provider openai-codex` behavior may change if provider-plugin architecture changes in upcoming releases.

@@ -94,6 +94,8 @@ USER.md
 
 # local tooling
 .serena/
+.codess/
+.coding-sess/
 
 # Agent credentials and memory (NEVER COMMIT)
 /memory/

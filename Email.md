@@ -157,6 +157,9 @@ Start with the highest-confidence Gmail path, then add IMAP/fallback once shared
 Recommendation 4: Keep evidence and decisions distinct.
 Use raw tables as support material, but make adoption decisions from explicit findings, tradeoffs, and confidence levels.
 
+Recommendation 5: Keep fetch, local mirror, and mailbox interaction roles explicit.
+Do not treat Gmail-native hooks, Maildir mirror tools, and mailbox clients as substitutes for one another. Each solves a different part of the system.
+
 ### 7.3. Reading path for decision-makers
 
 If the objective is decision-making rather than implementation detail, read this document in this order:
@@ -308,6 +311,23 @@ Exposure-bias controls:
 Implementation conclusion:
 the hybrid architecture is the most defensible target state, but rollout should begin with Gmail-native reliability and add IMAP/fallback only after shared normalization and gate controls are stable.
 
+### 9.6. Native Gmail versus Maildir mirror
+
+The architecture question is not which path is "better" in the abstract. The question is which path owns which function.
+
+| Function    | Gmail native path (`gog` + Pub/Sub/hooks)                                                | Maildir mirror path                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fetch       | Strong for low-latency event ingestion and provider-native metadata                      | Strong for durable local history and provider-independent replay once the mirror exists                                                    |
+| Prioritize  | Stronger inside OpenClaw because watch events already arrive in agent/runtime context    | Depends on an OpenClaw Maildir adapter or external mailbox client to surface candidate messages                                            |
+| Present     | Strong for OpenClaw-native summaries, templated delivery, and conversation-linked triage | Strong for local browsing and historical access, but weaker until normalized into OpenClaw events                                          |
+| Disposition | Narrow by default; strongest for ingest, summarize, and gated follow-up actions          | Strong when paired with a mailbox client such as `himalaya`, weaker for direct OpenClaw-native actions unless a dedicated adapter is built |
+
+OpenClaw conclusion:
+
+- Gmail native path is the best first ingestion path when Gmail is primary and event latency matters.
+- Maildir mirror is the best resilience and history layer when long local retention, provider independence, or replayability matter.
+- The likely durable design is Gmail-native fetch for immediacy plus optional Maildir mirror for fallback, archive, and replay.
+
 ## 10. Storage and Persistence Options
 
 Storage design determines whether relevance and safety claims can be audited. The core decision is to keep provider mailboxes as message truth while using a separate durable layer for policy decisions, feedback, and action traces.
@@ -355,9 +375,286 @@ Storage design determines whether relevance and safety claims can be audited. Th
 Storage conclusion:
 without a normalized, provider-independent audit record, any triage quality claim is weak and hard to reproduce. Durable decision traces are therefore mandatory, not optional.
 
+### 10.3.1. Schema patterns observed in the reviewed OSS
+
+The reviewed projects separate into three storage shapes:
+
+- mailbox and sync tools (`himalaya`, `neverest`, `getmail6`, `isync` / `mbsync`, `hoardy-mail`, `cloud_mdir_sync`) mostly use provider state, Maildir, and small sync/config state rather than application databases;
+- workflow systems (`inbox-zero`) keep provider mailboxes as content truth but add a relational sidecar for rules, actions, queues, digests, and audit trails;
+- classification projects (`gmailsorter`) persist a smaller SQL-backed local model of messages, labels, participants, tokens, and ML artifacts.
+
+Most useful reference points:
+
+- `inbox-zero`: PostgreSQL + Redis + Prisma schema with explicit entities for accounts, labels, rules, actions, digests, cleanup, filing, and message/thread tracking;
+- `gmailsorter`: SQLAlchemy schema with explicit message, thread, label, participant, OAuth token, and ML feature/model tables;
+- `offlineimap3`: local sync-status SQLite cache rather than a broad app database;
+- Maildir tools: strong file-store behavior, weak app-level schema guidance unless paired with a separate sidecar.
+
+OpenClaw implication:
+the sidecar store should not collapse message bodies, mailbox membership, provider metadata, sync cursors, and action history into one record. At minimum, keep distinct entities for account/provider identity, sync state, message identity, participants, mailbox membership, flags/status, provider-specific metadata, and action/audit history.
+
+### 10.3.2. `notmuch` as a reference architecture
+
+`notmuch` is easy to underestimate if treated as "just a local mail search tool". In implementation terms it is doing several harder things at once:
+
+- incremental crawl:
+  - `notmuch new` is not a naive rescan;
+  - it tracks directory state and mtimes and updates incrementally as Maildir files change.
+- logical message identity:
+  - the system does not treat filenames as the message identity;
+  - one logical message may correspond to multiple files or placements.
+- thread construction:
+  - threading is built from `Message-ID`, `In-Reply-To`, and `References`;
+  - missing references are represented by ghost records so partial archives still form coherent threads.
+- search/index separation:
+  - raw messages remain in Maildir or MH;
+  - searchable metadata, thread relations, tag state, and directory records live in a separate `Xapian` database.
+- Maildir/local-state bridge:
+  - Maildir filename flags can be synchronized into local tags;
+  - local tags can be written back into Maildir flags when configured.
+- exclusion semantics:
+  - excluded tags such as `deleted` or `spam` are hidden by default but can be explicitly surfaced;
+  - suppression is policy, not deletion.
+
+OpenClaw implication:
+`notmuch` is not the answer to the whole problem, but it is the strongest reference for three specific design choices:
+
+- keep raw mail files separate from searchable local metadata,
+- treat threading and identity as first-class local structures,
+- implement soft suppression and exclusion as explicit policy state rather than destructive movement or deletion.
+
+### 10.3.3. Pimalaya Maildir backend as reusable Rust substrate
+
+The reusable Rust mailbox layer in the Pimalaya family is the shared `email-lib` Maildir backend, not `neverest` as a CLI and not `himalaya` as a user-facing mailbox client.
+
+What the shared layer already provides:
+
+- Maildir and Maildir++ handling;
+- folder add/list/delete/expunge;
+- envelope get/list;
+- message add/peek/get/copy/move/remove;
+- flag add/set/remove;
+- integrity checks;
+- watch support;
+- local threading support;
+- filter and sort query support over local messages.
+
+Observed query support already includes:
+
+- filters:
+  - `date`
+  - `before`
+  - `after`
+  - `from`
+  - `to`
+  - `subject`
+  - `body`
+  - `flag`
+- boolean composition:
+  - `and`
+  - `or`
+  - `not`
+- sort keys:
+  - `date`
+  - `from`
+  - `to`
+  - `subject`
+
+What it does not provide:
+
+- a persistent local full-text index;
+- a durable sidecar database for policy, audit, ranking, or explanation state;
+- a `notmuch`-level thread/index model with ghost-message handling and persistent thread metadata.
+
+OpenClaw implication:
+if the project wants a Rust-first Maildir substrate, Pimalaya is already a strong mailbox layer. The missing work is not "how do we read Maildir". The missing work is:
+
+- sidecar schema,
+- replayable prioritization and blocking state,
+- durable custom attributes,
+- indexed search when file-by-file scans stop being acceptable.
+
+### 10.3.4. `Prisma` and `SQLAlchemy` in this context
+
+The ORM choices in the reviewed projects matter as signals about schema posture.
+
+- `Prisma` in `inbox-zero` signals a broad, explicit, migration-heavy application schema:
+  - accounts,
+  - provider state,
+  - labels and taxonomy,
+  - rules and executed actions,
+  - digests,
+  - filing,
+  - messaging side channels,
+  - organization and collaboration state.
+- `SQLAlchemy` in `gmailsorter` signals a smaller, local, still-queryable sidecar:
+  - messages,
+  - threads,
+  - labels,
+  - participants,
+  - OAuth token state,
+  - ML features and model artifacts.
+
+OpenClaw implication:
+
+- `Prisma` is the better reference for what a mature product schema eventually becomes.
+- `SQLAlchemy` is the better reference for what an initial local sidecar can look like without overcommitting to a large application platform.
+- Neither changes the core split this document is arguing for:
+  - raw message permanence,
+  - searchable local metadata,
+  - policy/action/audit state
+    should remain distinct layers even if they happen to share one physical database later.
+
+### 10.3.5. Anti-spam technology and standards as feature inputs
+
+Modern spam filtering engines are evaluating several different classes of evidence at once. That matters for OpenClaw because blocking and prioritization should not be designed as one undifferentiated classifier.
+
+The recurring signal families across mature OSS systems are:
+
+- authentication and provenance:
+  - SPF, DKIM, DMARC, ARC, `Authentication-Results`, `Received`, HELO/EHLO, PTR/rDNS, envelope sender, and domain alignment;
+- reputation:
+  - sender IP/domain reputation, URI reputation, historical complaint rates, rate limits, and blocklist membership;
+- MIME and structural integrity:
+  - malformed headers, missing `Date` / `From` / `Message-ID`, broken MIME trees, HTML-only content, suspicious encodings, image-heavy messages, odd attachment types;
+- lexical and statistical content:
+  - subject/body terms, token frequencies, Bayesian or ML features, language and formatting anomalies;
+- workflow and list headers:
+  - `List-Id`, `List-Unsubscribe`, one-click unsubscribe support, `Auto-Submitted`, `Precedence`, and other bulk/list conventions;
+- link and attachment inspection:
+  - domain mismatches, shorteners, visible-text versus href mismatches, archive/encrypted attachment patterns, malware/phish indicators.
+
+The strongest OSS references divide roughly like this:
+
+- `SpamAssassin`:
+  - expression language over `header`, `body`, `rawbody`, `uri`, `full`, `meta`, and `eval` tests;
+  - best reference for "how many normalized message surfaces should be exposed to rules";
+- `Rspamd`:
+  - score/symbol architecture with explicit actions such as accept, add header, greylist, and reject;
+  - strong reference for combining auth checks, reputation, composite expressions, and programmable extensions;
+- `bogofilter` and older statistical filters:
+  - useful reminders that spam and preference judgments often benefit from feedback loops, but too narrow to serve as the whole product model.
+
+Relevant standards and conventions:
+
+- `RFC 5322`: core message format and headers.
+- `RFC 7208`: SPF.
+- `RFC 6376`: DKIM.
+- `RFC 7489`: DMARC.
+- `RFC 8601`: `Authentication-Results`.
+- `RFC 8617`: ARC.
+- `RFC 2369`: `List-*` headers.
+- `RFC 8058`: one-click unsubscribe.
+- `RFC 3834`: `Auto-Submitted`.
+- `RFC 5228` and `RFC 5235`: Sieve and its `spamtest` / `virustest` extensions.
+
+Gmail-specific implication:
+
+- Gmail already does substantial provider-side spam and bulk classification;
+- Gmail sender guidance now explicitly expects SPF or DKIM, DMARC for large senders, TLS, valid PTR/rDNS, RFC 5322 formatting, one-click unsubscribe for bulk senders, and low complaint rates;
+- Gmail category and system labels should therefore be treated as important features, but not as the only truth for OpenClaw.
+
+OpenClaw implication:
+
+- blocking should be conservative and rely on high-confidence suppression signals:
+  - explicit spam/junk placement,
+  - strong authentication failure patterns,
+  - clear phishing or malware indicators,
+  - extremely poor reputation when available;
+- prioritization should remain a broader policy layer:
+  - sender familiarity,
+  - explicit asks and thread state,
+  - Gmail categories and labels,
+  - list/bulk headers,
+  - local user feedback,
+  - learned relevance models;
+- "bulk but wanted", "bulk but ignorable", and "true spam" should remain separate classes.
+
+### 10.3.6. Definitive schema references: `inbox-zero` and `gmailsorter`
+
+Two schema references matter more than the others because they show opposite ends of the sidecar-design spectrum.
+
+`inbox-zero`:
+
+- database/configuration path observed in repo and docs:
+  - local development:
+    - `docker compose -f docker-compose.dev.yml up -d`
+    - `cd apps/web && pnpm prisma migrate dev && cd ../..`
+  - container/runtime:
+    - `npx prisma generate --schema=apps/web/prisma/schema.prisma`
+    - `prisma migrate deploy --config=/app/docker/scripts/prisma.config.ts --schema=./apps/web/prisma/schema.prisma`
+  - datastore shape:
+    - PostgreSQL via Prisma;
+    - Redis / Upstash for queue and workflow state.
+- schema shape:
+  - identity/auth:
+    - `User`, `Account`, `Session`, `EmailAccount`, `ApiKey`;
+  - provider watch and sync state:
+    - Gmail/Outlook watch subscription fields and history ids on `EmailAccount`;
+  - taxonomy:
+    - `Label`, `Category`, `Group`, `GroupItem`, `Newsletter`, deprecated `ColdEmail`;
+  - policy/action model:
+    - `Rule`, `Action`, `RuleHistory`, `ExecutedRule`, `ExecutedAction`, `ScheduledAction`;
+  - message and thread tracking:
+    - `EmailMessage`, `ThreadTracker`, `ResponseTime`;
+  - digest/cleanup:
+    - `Digest`, `DigestItem`, `CleanupJob`, `CleanupThread`;
+  - adjacent integrations:
+    - messaging, calendar, drive, filing, MCP connections and tools.
+- important enum vocabularies:
+  - `ActionType` includes `ARCHIVE`, `LABEL`, `REPLY`, `SEND_EMAIL`, `FORWARD`, `DRAFT_EMAIL`, `MARK_SPAM`, `CALL_WEBHOOK`, `MARK_READ`, `DIGEST`, `MOVE_FOLDER`, `NOTIFY_SENDER`;
+  - `SystemType` includes `TO_REPLY`, `FYI`, `AWAITING_REPLY`, `ACTIONED`, `COLD_EMAIL`, `NEWSLETTER`, `MARKETING`, `CALENDAR`, `RECEIPT`, `NOTIFICATION`.
+
+`gmailsorter`:
+
+- creation/configuration path observed in docs and code:
+  - environment:
+    - `MAILSORT_ENV_CREDENTIALS_FILE=/path/to/credentials.json`
+    - `MAILSORT_ENV_DATABASE_URL=sqlite:////path/to/email.db`
+    - `MAILSORT_ENV_SECRET_KEY=...`
+  - web app:
+    - `python -m gmailsorter.webapp`
+  - manual worker operations:
+    - `gmailsorter-daemon -s -c ${MAILSORT_ENV_CREDENTIALS_FILE} -d ${MAILSORT_ENV_DATABASE_URL}`
+    - `gmailsorter-daemon -u -c ${MAILSORT_ENV_CREDENTIALS_FILE} -d ${MAILSORT_ENV_DATABASE_URL}`
+  - datastore shape:
+    - SQLAlchemy, default SQLite, with `Base.metadata.create_all(engine)` used to create tables.
+- schema shape:
+  - message tables:
+    - `email_content`, `email_threads`, `email_labels`, `email_from`, `email_to`, `email_cc`;
+  - auth/app state:
+    - `google_token`, `google_user`, `google_task`;
+  - ML state:
+    - `ml_labels`, `ml_features`.
+
+OpenClaw implication:
+
+- `inbox-zero` is the best schema reference for a mature application sidecar that keeps policy, audit, and workflow state explicit;
+- `gmailsorter` is the best schema reference for an early local classifier sidecar with compact SQL-backed persistence;
+- both reinforce the same conclusion:
+  - Maildir or provider mailboxes can remain the message substrate,
+  - but a sidecar database will still be needed for classification, blocking, prioritization, and action history.
+
+### 10.4. Direct OpenClaw Maildir adapter
+
+OpenClaw can plausibly operate on Maildir directly, but only through a mail-aware adapter. Maildir is not merely a folder of arbitrary text files. It carries mailbox semantics through MIME content, folder layout, and filename flags.
+
+A direct adapter would need to:
+
+1. watch `new`, `cur`, and `tmp`,
+2. parse MIME bodies, headers, and attachments,
+3. normalize account, folder, message, and thread identity into OpenClaw event records,
+4. preserve dedupe and state-transition logic,
+5. separate local mailbox state from OpenClaw policy and action history.
+
+Adapter conclusion:
+if Maildir becomes first-class in OpenClaw, it should be implemented as a mailbox substrate with a typed adapter boundary, not as generic file scraping.
+
 ## 11. OSS Project Analysis
 
 The OSS review is focused on operational reuse, not feature sightseeing. The test is whether each component helps solve the core failure mode described earlier: low-attention review cadence (sometimes daily, sometimes weekly), high-noise inboxes, and missed critical service or personal messages. This section preserves implementation detail while folding it back into decision pressure: multi-account handling, auth reliability, storage posture, and explainable triage.
+
+Detailed project catalog and local clone inventory are maintained in `../Emails/Emails.md`. This section keeps only the OSS detail that changes OpenClaw design choices.
 
 ### 11.1. Evaluation frame for OSS reuse
 
@@ -452,7 +749,7 @@ Candidates and role split:
 
 - `pimalaya/neverest`:
   - role: IMAP <-> Maildir sync, backup, and restore sidecar;
-  - strength: Gmail examples, OAuth2/keyring patterns, and a cleaner fit than a generic mail client when local mirror semantics are the goal;
+  - strength: explicit Gmail and Outlook examples, OAuth2/keyring patterns, and a cleaner fit than a generic mail client when local mirror semantics are the goal;
   - limitation: Rust process boundary and sync-state operational overhead.
 - Python stdlib `mailbox.Maildir`:
   - role: local read/write API;
@@ -460,39 +757,35 @@ Candidates and role split:
   - limitation: no network auth/sync/triage orchestration.
 - `getmail6`:
   - role: POP3/IMAP retrieval and delivery to local stores;
-  - strength: mature ingress/delivery focus;
-  - limitation: not a full mailbox operations platform.
+  - strength: mature ingress/delivery focus with explicit Gmail and Office 365 paths;
+  - limitation: not a full mailbox operations platform and weak as a durable Gmail metadata carrier.
 - `offlineimap3`:
   - role: IMAP <-> Maildir synchronization;
-  - strength: bidirectional mirror semantics;
+  - strength: bidirectional mirror semantics and the strongest Gmail label/metadata preservation in this set;
   - limitation: operational sync complexity; weak alignment with explainable action-policy layers.
 - `isync` / `mbsync`:
   - role: lightweight IMAP <-> Maildir synchronization;
   - strength: simpler Maildir-first workflow and smaller operational surface than the larger sync stacks;
-  - limitation: fewer Gmail-specific setup aids and less explicit policy/audit framing than the sidecar-oriented candidates.
+  - limitation: fewer Gmail-specific setup aids, no clear first-party Yahoo/Outlook positioning, and less explicit policy/audit framing than the sidecar-oriented candidates.
+- `hoardy-mail`:
+  - role: IMAP -> Maildir or MDA fetch with safe batch maintenance operations;
+  - strength: explicit Gmail, Yahoo, Hotmail, and Yandex recipes plus careful fetch/delete and expire flows;
+  - limitation: GPL-3.0, small project footprint, and weaker metadata fidelity than the richer sync stacks.
 - `cloud_mdir_sync`:
   - role: cloud API <-> Maildir synchronization;
-  - strength: useful where API constraints beat IMAP;
-  - limitation: narrower provider scope and smaller ecosystem.
+  - strength: Gmail API and Office365 Graph -> Maildir synchronization, plus local Maildir monitoring and upload-back;
+  - limitation: narrower provider scope, GPL-family license, and smaller ecosystem.
 
 Comparison to `pimalaya/himalaya`:
 
 - `pimalaya/himalaya` provides a broad read/manage/send CLI with IMAP/SMTP/Sendmail and optional OAuth2/keyring.
 - `pimalaya/neverest` is the clearest Pimalaya-side fit for Gmail -> Maildir fetch when the goal is a durable local mirror rather than human mailbox interaction.
 - `mailbox.Maildir` is local-only and useful as a primitive helper rather than a transport.
-- `getmail6` and `offlineimap3` are strong ingress/sync sidecars but not complete action layers.
+- `getmail6` is the mature ingress reference when simple Gmail/Office 365 fetch into local delivery matters more than mirror fidelity.
+- `offlineimap3` is the strongest Gmail-specific sync reference when label and mailbox fidelity matter more than operational simplicity.
 - `isync` / `mbsync` is the lightweight Maildir-first sync reference when the goal is a simple local mirror rather than richer account onboarding.
-- `cloud_mdir_sync` is situational and provider-specific.
-
-Weighted review order (integration fit 30, reliability 25, observability 20, auth/security 15, maintenance risk 10):
-
-- `pimalaya/himalaya` (86)
-- `pimalaya/neverest` (78)
-- `getmail6` (71)
-- `isync` / `mbsync` (69)
-- `offlineimap3` (67)
-- `mailbox.Maildir` (58)
-- `cloud_mdir_sync` (54)
+- `hoardy-mail` is the strongest explicit Yahoo -> Maildir reference in this set.
+- `cloud_mdir_sync` is the API-native Gmail/Office365 mirror reference when cloud APIs are preferable to IMAP.
 
 Practical sequence:
 
@@ -500,9 +793,46 @@ Practical sequence:
 2. Validate `neverest` as the first Gmail -> Maildir mirror candidate when durable local history is required.
 3. Prototype `getmail6` as the simpler ingress sidecar into the same normalized schema.
 4. Keep `isync` / `mbsync` as the lightweight Maildir-first alternative for simpler mirror workflows.
-5. Add `offlineimap3` only where full local mirror semantics are required.
-6. Use stdlib `mailbox.Maildir` for glue code/tests, not primary transport.
-7. Evaluate `cloud_mdir_sync` only when IMAP paths are non-viable.
+5. Keep `hoardy-mail` as the explicit Yahoo path and safety-oriented fetch/delete reference.
+6. Add `offlineimap3` where Gmail label and mailbox fidelity justify the heavier sync model.
+7. Use stdlib `mailbox.Maildir` for glue code/tests, not primary transport.
+8. Evaluate `cloud_mdir_sync` when API-native Gmail or Office365 sync is preferable to IMAP.
+
+#### 11.2.5. Recommended Gmail -> Maildir shortlist
+
+This shortlist separates fetch/mirror tools from mailbox interaction tools so the roles stay explicit.
+
+| Candidate           | Primary role                  | Fetch into Maildir                                                              | Display/manage from Maildir                            | OpenClaw fit                                                        |
+| ------------------- | ----------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| `pimalaya/neverest` | sync, backup, restore         | strongest current fit for Gmail -> Maildir mirror with structured account setup | limited; not the main purpose                          | first-choice mirror candidate when durable local history matters    |
+| `getmail6`          | retrieval and delivery        | simplest focused ingress path; Gmail and Office 365 documented                  | none beyond local delivery                             | first-choice simple ingress sidecar                                 |
+| `hoardy-mail`       | ingress plus safe maintenance | explicit Gmail/Yahoo/Hotmail -> Maildir or MDA fetch                            | none beyond delivery and batch mailbox operations      | first-choice explicit Yahoo path and delete/expire design reference |
+| `isync` / `mbsync`  | lightweight sync              | strong lightweight IMAP -> Maildir mirror                                       | none beyond mailbox sync                               | best lightweight mirror baseline                                    |
+| `offlineimap3`      | fuller sync semantics         | strong but heavier operationally; strongest Gmail label fidelity                | none beyond mailbox sync                               | use where Gmail metadata fidelity justifies the complexity          |
+| `cloud_mdir_sync`   | cloud API mirror              | API-native Gmail/Office365 -> Maildir sync                                      | none beyond sync and upload-back                       | use where API-native cloud sync is preferable to IMAP               |
+| `pimalaya/himalaya` | mailbox client                | secondary; not the main fit                                                     | strongest human/operator read/manage layer in this set | best Maildir interaction layer, not primary Gmail fetch layer       |
+
+Shortlist conclusion:
+
+- choose `neverest` when durable Gmail-aware mirroring is the goal,
+- choose `getmail6` when the goal is the simplest Gmail/Office 365 ingress path,
+- choose `hoardy-mail` when Yahoo compatibility or safe fetch/delete workflows matter,
+- choose `isync` / `mbsync` when you want the lightest Maildir-first sync,
+- keep `offlineimap3` as the heavier but most Gmail-faithful mirror option,
+- choose `cloud_mdir_sync` when API-native Gmail or Office365 sync is preferable to IMAP,
+- use `himalaya` for reading and disposition on top of Maildir, not as the primary Gmail fetch tool.
+
+Practical provider and Gmail-semantics split:
+
+| Candidate          | Gmail flags/status                              | Gmail metadata             | Gmail mailbox and directory mapping                           | Outlook documented        | Yahoo documented |
+| ------------------ | ----------------------------------------------- | -------------------------- | ------------------------------------------------------------- | ------------------------- | ---------------- |
+| `neverest`         | generic IMAP/Maildir state; adequate            | limited explicit evidence  | adequate for mirror structure, not a Gmail-semantic reference | yes                       | no               |
+| `getmail6`         | adequate for fetch/delivery flows               | weak as durable carry-over | limited; ingress-focused more than mailbox fidelity           | yes                       | no               |
+| `hoardy-mail`      | adequate for fetch and batch mailbox operations | limited explicit evidence  | explicit provider recipes and Maildir/MDA delivery            | Hotmail documented        | yes              |
+| `isync` / `mbsync` | good basic flags                                | weak                       | good simple mailbox mapping                                   | not explicitly documented | no               |
+| `offlineimap3`     | strong                                          | strongest in this set      | strongest in this set                                         | partial / mixed evidence  | no               |
+| `cloud_mdir_sync`  | moderate                                        | moderate                   | moderate; API-native cloud mapping                            | yes                       | no               |
+| `himalaya`         | strong as a client once the store exists        | not the main point         | strong local mailbox interaction                              | yes                       | no               |
 
 ### 11.3. Sorting and triage workers
 
@@ -581,9 +911,23 @@ the practical near-term mix is connector robustness plus deterministic policy pl
 
 ## 12. Commercial Vendor Coverage
 
-Source basis: collected review in `../Emails/Emails.md`. Pricing and tiers can change. The goal here is to extract stable operating semantics that improve real inbox outcomes, not to mirror marketing pages or chase feature parity.
+Source basis: collected review in `../Emails/Emails.md`. Pricing and tiers can change. The goal here is to extract stable operating semantics that improve real inbox outcomes, not to mirror marketing pages or chase feature parity. This section keeps only vendor-derived patterns that materially change OpenClaw design choices.
 
 ### 12.1. Directly relevant vendors
+
+#### 12.1.0. MailChannels, AgentMail, and LobsterMail
+
+These products matter because they target a newer design space than the traditional inbox tools in the OSS set: email infrastructure for agents rather than email for humans. They should not be treated as substitutes for a durable OpenClaw email architecture, but they are useful for pressure-testing the current Gmail Pub/Sub path and the boundary between provider infrastructure and OpenClaw-owned policy/state.
+
+- `MailChannels` is commercial outbound email infrastructure. The relevant fit is sending, delivery reputation, tracking, and API-first outbound operations. It is not a general mailbox product and does not replace a fetch, archive, or Maildir path. Public docs and support material position it as the send/delivery half of an OpenClaw automation stack rather than a full inbox solution.
+- `AgentMail` is commercial as a service, but its SDKs are documented as open source under MIT. Its fit is programmable agent inboxes with send/receive, thread handling, drafts, attachments, idempotent create flows, WebSocket notifications, and webhooks. This is closer to an agent-native email platform than to a traditional mailbox client.
+- `LobsterMail` is commercial agent-email infrastructure. Current public positioning emphasizes zero-config agent signup, webhook or poll delivery, built-in agent security, and a simpler alternative to Google Workspace + Pub/Sub + webhook setup. I did not find a main public OSS repo for the product itself.
+
+OpenClaw conclusion:
+
+- `MailChannels` is useful when outbound deliverability is the problem.
+- `AgentMail` and `LobsterMail` are useful when the problem is giving an agent a mailbox quickly without inheriting Gmail OAuth, Pub/Sub, and human-account overhead.
+- none of the three replace the need for a clear OpenClaw-side model for prioritization, presentation, policy, audit, and optional local history.
 
 #### 12.1.1. Fyxer
 
@@ -613,13 +957,44 @@ Clean Email is most useful as cleanup/unsubscribe/category UX reference. The maj
 
 #### 12.2.3. Seventh Sense
 
+### 12.3. What the agent-email providers imply for OpenClaw
+
+The public provider offerings sharpen the architectural split already visible in the OSS review.
+
+- OpenClaw's current Gmail-native path is still best understood as event ingestion plus hook-time summarization and wakeups.
+- `AgentMail` and `LobsterMail` show there is market demand for a simpler agent-inbox path: provision inbox, receive via webhook or socket, send programmatically, keep the personal mailbox out of scope.
+- `MailChannels` shows the outbound side can be separated cleanly from inbound mailbox ownership.
+
+Design implication:
+
+- if OpenClaw keeps Gmail Pub/Sub as its first-party email path, it should treat agent-email providers as alternative fetch and send backends rather than as a reason to weaken its own policy and sidecar model;
+- if OpenClaw adds a more native email subsystem later, the useful imports from these providers are provisioning speed, thread-safe programmatic send/receive, and clean real-time notifications, not their product boundaries or hosting assumptions.
+
 Seventh Sense focuses on outbound send-time optimization in marketing systems. It is adjacent, not a primary benchmark for inbound personal triage. Pricing posture in the collected pass was calculator-driven rather than fixed tiers.
 
 ### 12.3. Terminology and control taxonomy to standardize
 
-To make policy, UI labels, and model prompts interoperable, OpenClaw should standardize these terms across config and runtime explanations:
+To make policy, UI labels, and model prompts interoperable, OpenClaw should standardize these terms across config and runtime explanations. The criteria are:
+
+- use clear terms before fashionable product language;
+- keep state separate from action;
+- keep mailbox placement separate from content classification;
+- keep provider and product aliases available for matching/search, but not as canonical schema names;
+- prefer terms that support explanation, reversal, and audit.
+
+Observed drift in reviewed products and projects:
+
+- Gmail labels mix mailbox membership, topic grouping, and some workflow hints.
+- Outlook categories are metadata tags, not folders.
+- SaneBox terms such as `Later` and `NoReply` describe placement or workflow buckets, not content classes.
+- Fyxer and Cora "actionable" language blends priority state with action outcome.
+- `gmailsorter` uses labels as learned target vocabulary rather than stable canonical schema.
+- `inbox-zero` is the strongest OSS reference for keeping taxonomy, rules, and actions distinct.
+
+Canonical groups to preserve in OpenClaw:
 
 - content class: `receipt`, `newsletter`, `notification`, `outreach`, `personal`, `support`;
+- mailbox membership: `inbox`, `archive`, `spam`, `trash`, `sent`, provider/system labels;
 - priority state: `urgent`, `today`, `later`, `ignore`;
 - action type: `label`, `archive`, `prioritize`, `draft`, `send`, `forward`, `digest`;
 - ownership state: `unassigned`, `assigned`, `waiting`, `done`;
@@ -985,6 +1360,7 @@ current evidence supports two strong near-term candidates (`@agenticmail/opencla
 - isync GitHub mirror: `https://github.com/gburd/isync`
 - offlineimap3 repo: `https://github.com/OfflineIMAP/offlineimap3`
 - cloud_mdir_sync repo: `https://github.com/jgunthorpe/cloud_mdir_sync`
+- hoardy-mail repo: `https://github.com/Own-Data-Privateer/hoardy-mail`
 
 ## 17. Appendix: Protocol Controls, States, Fields, and Schema Cross-reference
 
@@ -1187,6 +1563,7 @@ Use this table to group same/similar terms by function and preserve cross-source
 | Sender authorization (email auth)  | SPF, DKIM, DMARC, auth results, alignment, disposition                  | RFC 7208 (SPF), RFC 6376 (DKIM), RFC 7489 (DMARC), RFC 8601 (`Authentication-Results`)                                                                    | trust/safety signal input for priority and action gating                  | `email-oauth2-proxy` transport/auth connectivity boundary; header parsing in triage pipelines     |
 | DNS and routing                    | DNS records, `MX`, exchanger, preference, `Null MX`, `TXT`              | RFC 1034/1035 (DNS), RFC 5321 Section 5 (MX lookup), RFC 7505 (`Null MX`)                                                                                 | mostly hidden behind provider UX, affects reliability/diagnostics         | `himalaya` and `email-oauth2-proxy` depend on SMTP/IMAP DNS resolution                            |
 | Mailbox organization               | mailbox, folder, label, category, tag, system label                     | IMAP mailbox model (RFC 9051); Gmail labels (provider-specific); Schema.org has no label primitive                                                        | Fyxer actionable labels; Clean Email cleanup categories                   | `himalaya` folders/mailboxes; `clearmail` provider labels/folders; `gmailsorter` label operations |
+| Maildir and local mirror substrate | Maildir, local mirror, cache, store, `cur/new/tmp`, sync state          | Maildir format references and local mailbox tooling; no single RFC term for application-side mirror metadata                                              | usually hidden behind product UX                                          | `neverest`, `getmail6`, `offlineimap3`, `isync`, `hoardy-mail`, `cloud_mdir_sync`                 |
 | Priority and urgency               | priority, important, urgent, act-now, later, ignore, starred            | RFC headers (`Priority`, `Importance`, `X-Priority`) in 5322/MIME context; policy layer otherwise                                                         | SaneBox (`Later`, `NoReply`, digest-first); Fyxer/Cora priority shaping   | `gmailsorter` supervised label-learning for priority-like routing; `inbox-zero` rule taxonomy     |
 | Action semantics                   | label, archive, prioritize, draft, send, forward, digest                | RFC 5321 (send), RFC 9051 mailbox updates; Gmail API drafts/messages/labels endpoints                                                                     | Fyxer/Cora drafting + structured outcomes; SaneBox archive/defer patterns | `himalaya` read/send roundtrip; `inbox-zero` action model; `clearmail` triage scripts             |
 | Ownership and workflow state       | unassigned, assigned, waiting, done, SLA                                | no protocol RFC; application workflow vocabulary                                                                                                          | Hiver shared inbox assignment/SLA                                         | `inbox-zero` audit/workflow semantics; team-state fields in AR schema                             |

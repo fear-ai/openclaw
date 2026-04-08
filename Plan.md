@@ -17,9 +17,12 @@ This is the source of truth for active work items, execution order, and promotio
 ## 2.2. Release intake and upstream tracking
 
 - [x] Run release status script against upstream official repo.
-- [x] Record current delta: local `2026.2.25`, upstream stable `2026.3.8` (2026-03-09), Homebrew cask `2026.3.7`.
-- [x] Review security-significant changelog deltas from `2026.2.26` through `2026.3.8`.
-- [ ] Decide upgrade window and execute controlled merge/update in both repos.
+- [x] Record current delta: local source lane `2026.4.1`, current Homebrew cask `2026.3.28`, installed Homebrew lane `2026.3.7`.
+- [x] Review security-significant changelog deltas from `2026.2.26` through `2026.4.1`.
+- [x] Rebase `feat/more_mail` onto `v2026.4.1`.
+- [x] Create `claw_emails` as the small docs branch on `v2026.4.1`.
+- [ ] Reconcile `origin/feat/more_mail` with the rewritten local stable-based branch.
+- [ ] Update the installed Homebrew lane from `2026.3.7` to current cask metadata.
 
 ## 2.3. Auth and model continuity
 
@@ -51,6 +54,48 @@ This is the source of truth for active work items, execution order, and promotio
 - [ ] Sandbox phased rollout.
 - [ ] Remote-first runtime shift.
 
+## 2.7. Comparative review -> implementation decision track
+
+- [x] Decide provisional base for the next several iterations:
+  - stay on `OpenClaw`
+  - use `Hermes` as an active comparison target rather than a migration target
+- [ ] Review `NemoClaw` actions and extract immediately applicable security/deployment ideas.
+- [ ] Review `DenchClaw` CRM and DuckDB/workspace model for sidecar-schema implications.
+- [ ] Review `Hermes` Honcho integration in enough detail to capture why the Hermes team chose it over a simpler local memory-only path.
+- [ ] Follow up with Hermes community on:
+  - Honcho tradeoffs,
+  - real use of built-in IMAP/SMTP,
+  - how much of the self-improving path is prompt/tool convention versus stronger mechanism.
+- [ ] Follow up with DenchClaw community on:
+  - fork maintenance cost,
+  - CRM schema stability,
+  - which parts are intended as reusable primitives versus product-specific code.
+
+## 2.8. Maildir and sidecar implementation track
+
+- [ ] Finalize the first serious Maildir ingest candidate for current testing:
+  - `neverest`
+  - `getmail6`
+  - or `mbsync`
+- [ ] Define the initial replay/reprocess path:
+  - `notmuch`-backed first pass
+  - or custom OpenClaw-side indexing first
+- [ ] Capture the minimum sidecar entity set before overloading Maildir filename/folder state:
+  - accounts/providers
+  - conversations/threads
+  - messages
+  - participants
+  - mailbox membership
+  - flags/status
+  - provider-specific metadata
+  - local policy/classification state
+  - action/audit history
+- [ ] Decide the first display boundary:
+  - Himalaya-backed interaction
+  - direct OpenClaw Maildir adapter
+  - or hybrid
+- [ ] Define the first prioritization and blocking rule set for replayed Maildir history.
+
 ## 3. Promotion Gates
 
 A phase promotion requires all of:
@@ -64,5 +109,27 @@ A phase promotion requires all of:
 
 1. Complete Codex OAuth reauth through configure model section.
 2. Verify post-reauth model/runtime health and reconnect behavior.
-3. Decide and schedule controlled rebases of `feat/more_mail` and `ai_email` onto `upstream/main`.
-4. Execute the repo-lane update to `2026.3.8` and the Homebrew stock-lane update to `2026.3.7`, then verify behavior in both lanes.
+3. Push the rewritten `feat/more_mail` branch to `origin` with an intentional `--force-with-lease` after review.
+4. Upgrade the installed Homebrew lane, then verify stock and repo behavior in both lanes.
+
+## 5. Review Sequence
+
+Near-term review order:
+
+1. `NemoClaw`:
+
+- security/deployment hardening ideas worth applying without adopting the full NVIDIA stack.
+
+2. `DenchClaw`:
+
+- structured workspace, DuckDB, documents, reports, CRM entity patterns, and lift-versus-copy boundaries.
+
+3. `Hermes` / Honcho:
+
+- user-modeling goals, memory boundary choices, and what is actually gained by the Honcho dependency.
+
+4. Maildir implementation decision:
+
+- choose first serious ingest path
+- choose first reprocessing/index direction
+- define first sidecar schema sketch

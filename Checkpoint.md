@@ -1,16 +1,16 @@
 # Session Checkpoint
 
-Updated: 2026-03-10T01:42:55Z
+Updated: 2026-04-04
 
 ## 1. Current State
 
 - OpenClaw repo:
   - path: `/Users/walter/Work/Claw/openclaw`
-  - branch/head: `feat/more_mail` @ `10f720d69`
-  - local package version: `2026.2.25`
+  - branch/head: `feat/more_mail` @ `305a83bfad`
+  - local package version: `2026.4.1`
 - Docs repo:
   - path: `/Users/walter/Work/Claw/openclaw-docs`
-  - branch/head: `ai_email` @ `58cdb9477`
+  - branch/head: `claw_emails` @ `b1ef8555ad`
 
 ## 2. Runtime Snapshot
 
@@ -30,10 +30,12 @@ Updated: 2026-03-10T01:42:55Z
 
 ## 4. Key Findings Captured
 
-1. Local repo version remains behind upstream stable (`2026.2.25` vs `2026.3.8`), while the Homebrew stock lane is currently at `2026.3.7`.
+1. Local source lane is now on `2026.4.1`, while the installed Homebrew stock lane on this machine remains at `2026.3.7`.
 2. OpenAI Codex reauth path is `configure --section model` in current workspace behavior.
 3. Claude/Codex user-agent handling differs by provider path and is now documented in `Code.md`.
 4. Runtime artifact mismatch issue was process/runtime consistency, not build failure.
+5. `feat/more_mail` has now been rebased onto `v2026.4.1`; the remaining branch-maintenance task is reconciling the remote branch with the rewritten stable-based local history.
+6. Homebrew cask metadata is now `2026.3.28`, but the installed stock lane on this machine is still `2026.3.7`.
 
 ## 5. First Commands on Resume
 
@@ -48,5 +50,5 @@ pnpm -C /Users/walter/Work/Claw/openclaw openclaw --profile repo gateway status 
 
 1. Re-auth Codex via configure model flow.
 2. Verify model/runtime status post-reauth.
-3. Rebase the repo and docs branches onto current upstream while preserving local branch tops.
-4. Verify the repo lane against `2026.3.8` and the stock Homebrew lane against `2026.3.7`.
+3. Reconcile `origin/feat/more_mail` with the rewritten local `v2026.4.1` branch.
+4. Upgrade and verify the stock Homebrew lane against current cask metadata.
