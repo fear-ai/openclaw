@@ -1,5 +1,44 @@
 # OpenClaw Email Processing
 
+## Table of Contents
+
+- [1. Introduction](#1-introduction)
+- [2. Methodology](#2-methodology)
+  - [2.1. Research posture and attitude](#21-research-posture-and-attitude)
+  - [2.2. Evidence and decision rules](#22-evidence-and-decision-rules)
+  - [2.3. Scope boundaries for this phase](#23-scope-boundaries-for-this-phase)
+- [3. Problem Statement](#3-problem-statement)
+- [4. Goals and Success Criteria](#4-goals-and-success-criteria)
+- [5. Solution Thesis, Benefits, and PMF](#5-solution-thesis-benefits-and-pmf)
+- [6. Requirements and Design Constraints](#6-requirements-and-design-constraints)
+- [7. Architecture and Design Direction](#7-architecture-and-design-direction)
+  - [7.1. Decision-oriented findings](#71-decision-oriented-findings)
+  - [7.2. Recommendations](#72-recommendations)
+  - [7.3. Reading path for decision-makers](#73-reading-path-for-decision-makers)
+- [8. Validation Status](#8-validation-status)
+- [9. Implementation Options](#9-implementation-options)
+  - [9.1. Option A: Gmail native pipeline](#91-option-a-gmail-native-pipeline)
+  - [9.2. Option B: IMAP-first pipeline](#92-option-b-imap-first-pipeline)
+  - [9.3. Option C: Hybrid](#93-option-c-hybrid)
+  - [9.4. Controlled automation rollout](#94-controlled-automation-rollout)
+  - [9.5. AR processing model for inbox accessibility](#95-ar-processing-model-for-inbox-accessibility)
+  - [9.6. Native Gmail versus Maildir mirror](#96-native-gmail-versus-maildir-mirror)
+- [10. Storage and Persistence Options](#10-storage-and-persistence-options)
+  - [10.3.2. `notmuch` as a reference architecture](#1032-notmuch-as-a-reference-architecture)
+  - [10.3.3. Pimalaya Maildir backend as reusable Rust substrate](#1033-pimalaya-maildir-backend-as-reusable-rust-substrate)
+  - [10.3.4. Schema posture in reviewed projects](#1034-schema-posture-in-reviewed-projects)
+  - [10.3.5. Canonical substrate summary](#1035-canonical-substrate-summary-pimalaya-himalaya-neverest-and-notmuch)
+  - [10.3.6. Anti-spam technology and standards as feature inputs](#1036-anti-spam-technology-and-standards-as-feature-inputs)
+  - [10.3.7. Definitive schema references](#1037-definitive-schema-references-inbox-zero-and-gmailsorter)
+  - [10.4. Direct OpenClaw Maildir adapter](#104-direct-openclaw-maildir-adapter)
+- [11. OSS Project Analysis](#11-oss-project-analysis)
+- [12. Commercial Vendor Coverage](#12-commercial-vendor-coverage)
+- [13. Recommended Near-term Plan for the Email Project](#13-recommended-near-term-plan-for-the-email-project)
+- [14. OSS Maturity Snapshot](#14-oss-maturity-snapshot-collected)
+- [15. Open Questions](#15-open-questions)
+- [16. References](#16-references)
+- [17. Appendix: Protocol Controls, States, Fields, and Schema Cross-reference](#17-appendix-protocol-controls-states-fields-and-schema-cross-reference)
+
 ## 1. Introduction
 
 Email remains one of the highest-value but highest-friction information streams for operators, builders, and small teams running OpenClaw. The core difficulty is not raw ingestion. The difficulty is selective attention under constant change: too many updates, uneven source quality, conflicting urgency signals, and unclear trust boundaries for automation.
@@ -474,11 +513,11 @@ if the project wants a Rust-first Maildir substrate, Pimalaya is already a stron
 - durable custom attributes,
 - indexed search when file-by-file scans stop being acceptable.
 
-### 10.3.4. `Prisma` and `SQLAlchemy` in this context
+### 10.3.4. Schema posture in reviewed projects
 
-The ORM choices in the reviewed projects matter as signals about schema posture.
+The useful comparison here is not ORM choice. It is schema posture.
 
-- `Prisma` in `inbox-zero` signals a broad, explicit, migration-heavy application schema:
+- `inbox-zero` shows a broad, explicit, migration-heavy application schema:
   - accounts,
   - provider state,
   - labels and taxonomy,
@@ -487,7 +526,7 @@ The ORM choices in the reviewed projects matter as signals about schema posture.
   - filing,
   - messaging side channels,
   - organization and collaboration state.
-- `SQLAlchemy` in `gmailsorter` signals a smaller, local, still-queryable sidecar:
+- `gmailsorter` shows a smaller, local, still-queryable sidecar:
   - messages,
   - threads,
   - labels,
@@ -497,15 +536,67 @@ The ORM choices in the reviewed projects matter as signals about schema posture.
 
 OpenClaw implication:
 
-- `Prisma` is the better reference for what a mature product schema eventually becomes.
-- `SQLAlchemy` is the better reference for what an initial local sidecar can look like without overcommitting to a large application platform.
+- do not optimize around an ORM choice this early;
+- choose the schema posture once and keep it stable;
+- borrow the broad entity set from `inbox-zero` and the compact sidecar discipline from `gmailsorter`;
+- keep provider mailbox state, derived local classification state, and audit/action history as explicit layers even if they end up sharing one physical database.
+
+### 10.3.5. Canonical substrate summary: Pimalaya, Himalaya, Neverest, and `notmuch`
+
+This is the canonical short substrate summary for the rest of the document set.
+
+`Pimalaya email-lib`
+
+- reusable Rust mailbox substrate;
+- owns Maildir, IMAP, SMTP, query, sort, watch, threading, and mailbox mutation capabilities;
+- strongest fit when the question is:
+  - how do we read, update, and watch mailboxes with a reusable Rust layer?
+
+`Himalaya`
+
+- user-facing mailbox client on top of the shared Pimalaya stack;
+- strongest fit when the question is:
+  - how do we expose mailbox interaction through a process boundary quickly?
+- useful for:
+  - listing,
+  - filtering,
+  - sorting,
+  - reading,
+  - moving,
+  - flagging,
+  - drafting and sending.
+
+`Neverest`
+
+- sync and mirroring tool on top of the same family of crates;
+- strongest fit when the question is:
+  - how do we fetch from IMAP or Gmail-adjacent account paths into a durable local mirror such as Maildir?
+- useful for:
+  - date-scoped backfill,
+  - folder-scoped sync,
+  - local mirror and replay setup.
+
+`notmuch`
+
+- not a fetcher and not a general mailbox library;
+- strongest fit when the question is:
+  - how should local identity, threading, indexing, flag-tag synchronization, and exclusion semantics work above a Maildir store?
+
+OpenClaw implication:
+
+- the Pimalaya family is the strongest reusable Rust mailbox substrate;
+- `Himalaya` is the most credible early interaction boundary;
+- `Neverest` is the most credible early Maildir-ingest and mirror candidate;
+- `notmuch` remains the best reference for the local index and suppression layer that still has to be designed.
+
+This is the canonical email-substrate summary for the project.
 - Neither changes the core split this document is arguing for:
   - raw message permanence,
   - searchable local metadata,
   - policy/action/audit state
     should remain distinct layers even if they happen to share one physical database later.
 
-### 10.3.5. Anti-spam technology and standards as feature inputs
+### 10.3.6. Anti-spam technology and standards as feature inputs
 
 Modern spam filtering engines are evaluating several different classes of evidence at once. That matters for OpenClaw because blocking and prioritization should not be designed as one undifferentiated classifier.
 
@@ -570,7 +661,7 @@ OpenClaw implication:
   - learned relevance models;
 - "bulk but wanted", "bulk but ignorable", and "true spam" should remain separate classes.
 
-### 10.3.6. Definitive schema references: `inbox-zero` and `gmailsorter`
+### 10.3.7. Definitive schema references: `inbox-zero` and `gmailsorter`
 
 Two schema references matter more than the others because they show opposite ends of the sidecar-design spectrum.
 
