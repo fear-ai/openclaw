@@ -79,6 +79,14 @@ That target state should be treated as the base environment for the next several
 ### 7. Email integration testing and boundary work
 
 - Validate the Gmail-native path with `gog` as the first OpenClaw-facing email integration path.
+- Verify and expose the richer `gog` Gmail hook fields already available upstream:
+  - `historyId`
+  - `deletedMessageIds`
+  - `threadId`
+  - `to`
+  - `date`
+  - `labels`
+  - `bodyTruncated`
 - Run mailbox-interaction tests with `himalaya` as the secondary interaction layer.
 - Use the current repo-profile environment under `~/.openclaw-repo` as the place where those integration tests are exercised and recorded.
 - Decide whether the first usable display boundary is:

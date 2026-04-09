@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [1. Introduction](#1-introduction)
+  - [1.1. Email document map and inclusion rules](#11-email-document-map-and-inclusion-rules)
 - [2. Methodology](#2-methodology)
   - [2.1. Research posture and attitude](#21-research-posture-and-attitude)
   - [2.2. Evidence and decision rules](#22-evidence-and-decision-rules)
@@ -38,12 +39,42 @@
 - [15. Open Questions](#15-open-questions)
 - [16. References](#16-references)
 - [17. Appendix: Protocol Controls, States, Fields, and Schema Cross-reference](#17-appendix-protocol-controls-states-fields-and-schema-cross-reference)
+  - [17.10. Work sequence for remaining questions and decisions](#1710-work-sequence-for-remaining-questions-and-decisions)
+  - [17.11. Current working resolutions](#1711-current-working-resolutions)
+  - [17.12. Source adapter contract and implementation suggestion](#1712-source-adapter-contract-and-implementation-suggestion)
 
 ## 1. Introduction
 
 Email remains one of the highest-value but highest-friction information streams for operators, builders, and small teams running OpenClaw. The core difficulty is not raw ingestion. The difficulty is selective attention under constant change: too many updates, uneven source quality, conflicting urgency signals, and unclear trust boundaries for automation.
 
 This document treats email handling as an accessibility and decision-quality problem first, and an integration problem second. The objective is to define a practical path from noisy inbound streams to reliable, explainable, policy-bounded actions.
+
+### 1.1. Email document map and inclusion rules
+
+`Email.md` is the central document for the email subject in this workspace.
+
+The email-specific document set should stay compact:
+
+- `Email.md`
+  - central narrative, document map, problem framing, implementation direction, decision summaries, and the rules for where email material belongs.
+- `EmailModel.md`
+  - canonical technical reference for email entities, information elements, behaviors, relationships, and adaptation rules.
+- `EmailMatrix.md`
+  - comparison instrument for providers, protocols, libraries, tools, and reviewed products mapped against the canonical model.
+
+Document-inclusion rule for this set:
+
+- `Email.md` is the only place that should act as the email document map.
+- `Email.md` should cross-reference `EmailModel.md` and `EmailMatrix.md` directly whenever a summary needs a canonical definition or a side-by-side comparison.
+- `EmailModel.md` and `EmailMatrix.md` should stay mostly self-contained and should reference `Email.md` only when a direct pointer materially improves clarity.
+- `Priorai.md` may reference `Email.md` sections occasionally because email is the first proving ground, but `Email.md` should remain readable on its own.
+- Avoid duplicating long field catalogs, behavior lists, or mapping tables in multiple documents. Put the full version in one place, then point to it.
+
+In practice, use this split:
+
+- put broad framing, market/project context, implementation choices, and high-level conclusions in `Email.md`;
+- put canonical naming, value semantics, entity relationships, and adaptation rules in `EmailModel.md`;
+- put cross-provider and cross-tool comparisons in `EmailMatrix.md`.
 
 ## 2. Methodology
 
@@ -199,6 +230,11 @@ Use raw tables as support material, but make adoption decisions from explicit fi
 Recommendation 5: Keep fetch, local mirror, and mailbox interaction roles explicit.
 Do not treat Gmail-native hooks, Maildir mirror tools, and mailbox clients as substitutes for one another. Each solves a different part of the system.
 
+Canonical follow-up:
+
+- use `EmailModel.md` for the authoritative definitions of entities, fields, behaviors, and relationships;
+- use `EmailMatrix.md` for side-by-side provider, library, tool, and product comparisons.
+
 ### 7.3. Reading path for decision-makers
 
 If the objective is decision-making rather than implementation detail, read this document in this order:
@@ -207,6 +243,11 @@ If the objective is decision-making rather than implementation detail, read this
 2. section 14 for current market/integration readiness signals,
 3. section 13 for execution and promotion gates,
 4. sections 11-12 and 17 only for technical due diligence.
+
+When the question shifts from "what should we do" to "what exactly does this field or behavior mean", use:
+
+- `EmailModel.md` for canonical technical definitions;
+- `EmailMatrix.md` for compatibility and mapping details.
 
 ## 8. Validation Status
 
@@ -218,6 +259,12 @@ This section captures current execution confidence, distinguishing verified beha
   - `docs/automation/gmail-pubsub.md`
   - `docs/automation/webhook.md`
   - `docs/hooks.md`
+- `gog` source and docs were reviewed directly enough to verify the current Gmail watch payload and serving semantics:
+  - top-level `historyId`
+  - top-level `deletedMessageIds`
+  - per-message `id`, `threadId`, `from`, `to`, `subject`, `date`, `snippet`, `body`, `bodyTruncated`, `labels`
+  - supported history types: `messageAdded`, `messageDeleted`, `labelAdded`, `labelRemoved`
+  - default excluded labels: `SPAM`, `TRASH`
 - `gog auth add` failure mode was reproduced:
   - `Error 403: org_internal`
   - root cause: OAuth client/consent audience policy mismatch.
@@ -253,6 +300,16 @@ Pipeline:
 3. `gog gmail watch serve`.
 4. OpenClaw webhook route.
 5. Agent execution and policy-gated actions.
+
+Verified `gog` watch payload already carries more than the current OpenClaw summary mapping uses:
+
+- top-level `historyId`
+- top-level `deletedMessageIds`
+- per-message `threadId`
+- per-message `to`
+- per-message `date`
+- per-message `labels`
+- per-message `bodyTruncated`
 
 Best when:
 
@@ -366,6 +423,7 @@ OpenClaw conclusion:
 - Gmail native path is the best first ingestion path when Gmail is primary and event latency matters.
 - Maildir mirror is the best resilience and history layer when long local retention, provider independence, or replayability matter.
 - The likely durable design is Gmail-native fetch for immediacy plus optional Maildir mirror for fallback, archive, and replay.
+- The immediate OpenClaw improvement path is not a new connector. It is exposing more of the already-available `gog` Gmail surface before deeper adapter work begins.
 
 ## 10. Storage and Persistence Options
 
@@ -1455,6 +1513,13 @@ current evidence supports two strong near-term candidates (`@agenticmail/opencla
 
 ## 17. Appendix: Protocol Controls, States, Fields, and Schema Cross-reference
 
+This appendix remains the compact support layer inside `Email.md`.
+
+For complete canonical definitions and full comparison coverage, use:
+
+- `EmailModel.md`
+- `EmailMatrix.md`
+
 This appendix standardizes terms across IMAP, SMTP, POP, Gmail API, and message-level metadata.  
 Goal: preserve aliases and field names for long-term matching, migration, and policy portability.
 
@@ -1662,3 +1727,457 @@ Use this table to group same/similar terms by function and preserve cross-source
 | Ingestion/event pipeline           | watch, webhook, poll, idle, history cursor                              | Gmail API `users.watch`, `users.history.list`; IMAP `IDLE` in protocol model                                                                              | near-real-time triage expectation in modern assistants                    | `inbox-zero` watch/webhook model; OpenClaw `gog` + webhook path; IMAP polling fallback            |
 | Body and attachment representation | MIME tree, body text/html, attachment metadata, content type            | RFC 2045-2049 (MIME), RFC 5322 headers; Schema.org `messageAttachment`, `text`                                                                            | user-facing summarization and preview                                     | `emailgenius` parsing pipeline, `himalaya` message rendering, `inbox-zero` processing             |
 | Structured interchange fields      | sender, recipients, date sent/received/read, attachment                 | Schema.org `email` + `EmailMessage` (`sender`, `toRecipient`, `ccRecipient`, `bccRecipient`, `dateSent`, `dateReceived`, `dateRead`, `messageAttachment`) | interoperability and metadata export/import                               | normalization target for AR schema before policy/model stages                                     |
+
+### 17.10. Work sequence for remaining questions and decisions
+
+The remaining work should proceed in a strict sequence. The order matters because later decisions depend on earlier terminology, mapping, and validation work.
+
+#### 17.10.1. Step 1: Freeze the canonical email model
+
+Objective:
+
+- establish the canonical entities, fields, behaviors, and relationships before adding more product-specific schemas or implementation details.
+
+Primary sources:
+
+- RFC and protocol semantics;
+- Gmail provider semantics;
+- Maildir storage semantics;
+- canonical model work captured in `EmailModel.md`.
+
+Deliverables:
+
+- complete canonical information-element list;
+- complete canonical behavior list;
+- complete entity-relationship list;
+- explicit distinction between:
+  - provider-native fields,
+  - mailbox-native abstractions,
+  - product-owned state.
+
+Acceptance criteria:
+
+- every term used later in `Email.md`, `EmailMatrix.md`, and the implementation notes can be mapped to a canonical definition;
+- no canonical field depends on a single product schema for its meaning;
+- identity, conversation, placement, state, provenance, sync, ownership, feedback, and scoring are all covered.
+
+Stop conditions:
+
+- if a new field is proposed but cannot be defined independently of one provider or one product, do not add it yet;
+- if two fields appear redundant, preserve both until the semantic difference is explicitly resolved.
+
+#### 17.10.2. Step 2: Build the protocol and provider concordance
+
+Objective:
+
+- map standards and provider-native semantics onto the canonical model without flattening meaningful differences.
+
+Sources to compare first:
+
+- RFC 5322 / MIME
+- SMTP
+- POP3
+- IMAP
+- Maildir
+- Gmail API
+- `gog`
+
+Deliverables:
+
+- canonical-to-protocol/provider concordance table;
+- notes on value shapes, ranges, and cardinality;
+- notes on behavior differences such as:
+  - `Date` vs `internalDate`
+  - provider history vs snapshot semantics
+  - labels vs folders
+  - provider thread ids vs RFC threading.
+
+Acceptance criteria:
+
+- each canonical field has a protocol/provider mapping note where applicable;
+- all lossy mappings are marked explicitly;
+- provider-only fields that must be preserved are called out.
+
+#### 17.10.3. Step 3: Map Pimalaya, Himalaya, Neverest, and OpenClaw current usage
+
+Objective:
+
+- determine what the current mailbox and runtime surfaces already expose, what they imply behaviorally, and what they omit.
+
+Sources:
+
+- Pimalaya shared library capabilities;
+- Himalaya CLI naming and behavior;
+- Neverest sync naming and behavior;
+- OpenClaw Gmail hook path and `gog` integration.
+
+Deliverables:
+
+- canonical-to-Pimalaya/Himalaya/Neverest concordance;
+- canonical-to-OpenClaw current Gmail-hook concordance;
+- explicit mismatch list for:
+  - naming
+  - value types
+  - relationship decomposition
+  - behavioral assumptions.
+
+Acceptance criteria:
+
+- any silent assumptions in OpenClaw about `gog` payload shape are documented;
+- any gaps between mailbox-native semantics and OpenClaw summary-level semantics are documented;
+- field loss between Gmail/`gog` and OpenClaw current usage is explicit.
+
+Decision questions to answer here:
+
+- which canonical fields are already available with no new code;
+- which canonical fields require richer message fetch than current hook summaries provide;
+- which behaviors are already enforced by Pimalaya/Himalaya and should be adopted rather than reinvented.
+
+#### 17.10.4. Step 4: Specify the adaptation strategy
+
+Objective:
+
+- define how source-native records become canonical records and how canonical records become product-usable records.
+
+Deliverables:
+
+- source-adapter rules for:
+  - Gmail / `gog`
+  - Maildir-backed local mirrors
+  - IMAP mailbox access
+- normalization rules for:
+  - identity
+  - conversation
+  - mailbox membership
+  - message state
+  - provenance/auth
+  - sync and replay
+- preservation rules describing which source fields must remain stored unmodified.
+
+Acceptance criteria:
+
+- the adaptation path is explicit for each important mismatch;
+- product-owned state is never used to overwrite source truth;
+- replay and reprocessing remain possible from stored source facts.
+
+#### 17.10.5. Step 5: Validate one Gmail-native path and one mailbox-native path
+
+Objective:
+
+- prove that the canonical model and adaptation rules survive real execution on both the provider-native and mailbox-native sides.
+
+Validation targets:
+
+- Gmail-native:
+  - `gog`
+  - Gmail watch/history/message fetch path
+  - OpenClaw Gmail hook processing
+- mailbox-native:
+  - Himalaya
+  - Neverest / Maildir mirror where applicable
+
+Deliverables:
+
+- verified field inventory actually obtainable in this workspace;
+- verified behavior inventory actually observable in this workspace;
+- list of missing fields, ambiguous fields, and unexpectedly shaped values;
+- notes on local operational friction and failure modes.
+
+Acceptance criteria:
+
+- first successful mailbox operations and field extraction are documented;
+- the canonical model does not require silent reinterpretation to fit the observed data;
+- at least one Gmail-native and one mailbox-native path can populate the core canonical domains.
+
+#### 17.10.6. Step 6: Correlate reviewed product schemas and implementations
+
+Objective:
+
+- bring in `inbox-zero`, `gmailsorter`, and later Hermes only after the canonical and mailbox/provider bases are stable.
+
+Deliverables:
+
+- canonical-to-`inbox-zero` notes;
+- canonical-to-`gmailsorter` notes;
+- later canonical-to-Hermes notes;
+- list of extra product-specific elements that are:
+  - useful,
+  - unnecessary,
+  - too opinionated for the canonical model.
+
+Acceptance criteria:
+
+- no reviewed product becomes the accidental source of truth for canonical naming;
+- reused entities are justified by behavior and relationship fit, not by familiarity alone;
+- implementation-specific artifacts such as ORM-driven partitions or ML storage tricks remain marked as local choices, not canonical requirements.
+
+#### 17.10.7. Step 7: Define the first implementation boundary
+
+Objective:
+
+- decide what gets built first and where the handoff between fetch, normalization, and prioritization lives.
+
+Decision surface:
+
+- Gmail-native only vs hybrid vs Maildir-first;
+- provider-history replay vs Maildir replay vs both;
+- minimum canonical fields required for first scoring and display pass;
+- minimum feedback fields required for evaluation.
+
+Deliverables:
+
+- first implementation boundary definition;
+- first minimal persisted record shape;
+- first replay/evaluation input shape;
+- deferred-field list with rationale.
+
+Acceptance criteria:
+
+- the first implementation can be built without renaming the canonical model later;
+- no deferred field is silently assumed by scoring or action logic;
+- the chosen first path preserves future convergence with the wider canonical model.
+
+#### 17.10.8. General execution rules
+
+Apply these rules throughout the sequence:
+
+1. Prefer actual code and observed runtime behavior over week-old notes or product copy.
+2. Preserve behavior and relationships even when names drift.
+3. Treat provider-native ids, threading, placement, and history as distinct until proven safely mergeable.
+4. Keep ownership and access separate from grouping or categorization.
+5. When in doubt, preserve more source truth and derive later.
+6. Record all lossy mappings explicitly.
+7. Separate:
+   - source truth,
+   - normalized canonical state,
+   - product-owned feedback and scoring state.
+
+### 17.11. Current working resolutions
+
+The following decisions are treated as the current working baseline unless later evidence forces revision.
+
+#### 17.11.1. Canonical semantics source
+
+Standards and prevalent mailbox/provider behavior are the semantic base.
+
+- RFC 5322, MIME, SMTP, POP3, IMAP, and Maildir behavior define the canonical meaning of message identity, parts, state, and mailbox placement.
+- Provider-native semantics such as Gmail `threadId`, `labelIds`, `historyId`, and `internalDate` remain first-class provider projections and must not be flattened away.
+- Naming drift is acceptable if behavior and entity relationships are preserved.
+
+#### 17.11.2. Replay path priority
+
+Replay starts from Maildir first.
+
+Rationale:
+
+- Maildir provides a durable local mirror and a stable replay substrate;
+- Maildir replay avoids over-coupling the first evaluation loop to Gmail-only history semantics;
+- provider history remains important and should still be preserved where available for incremental update handling and diagnostics.
+
+Implication:
+
+- provider change feeds remain part of the source-sync model;
+- first replay and reprocessing validation should be designed around the Maildir mirror.
+
+#### 17.11.3. Prioritization baseline
+
+The first prioritization pass should strongly promote:
+
+- unread messages;
+- starred or otherwise strongly flagged messages.
+
+This is a baseline heuristic, not the whole scoring model.
+
+Implication:
+
+- `is_read` and `is_flagged` are mandatory first-pass canonical fields;
+- read and star actions must be captured from the start.
+
+#### 17.11.4. Action scope from day one
+
+The following actions must be first-class from the start:
+
+- read
+- star
+- draft
+- spam
+
+They should be modeled as:
+
+- mailbox/provider actions where applicable;
+- explicit action-history events in the sidecar;
+- inputs into ranking and policy evaluation.
+
+#### 17.11.5. Ownership scope
+
+Ownership and access semantics remain important, but detailed multi-principal ownership modeling is postponed.
+
+Current implication:
+
+- keep canonical ownership and access fields in the model;
+- defer more complex team/shared-mailbox policy design until the single-principal flow is validated.
+
+#### 17.11.6. Threading priority
+
+Threading is explicitly deprioritized in the first implementation pass.
+
+Rationale:
+
+- thread semantics are valuable but can distract from the higher-value questions of fetch, state preservation, replay, and prioritization quality;
+- provider thread ids and RFC threading should still be preserved so deeper thread-aware behavior can be added later without schema churn.
+
+Current implication:
+
+- preserve `provider_thread_id`, `conversation_id`, `in_reply_to_message_id`, and `references_message_ids`;
+- do not make rich thread logic a blocker for first validation.
+
+#### 17.11.7. OpenClaw and `gog` posture
+
+`OpenClaw` will continue changing, so implementation questions should be phrased from requirements and architecture rather than from the current hook implementation alone.
+
+Current `gog` understanding:
+
+- `gog` is Gmail-native and follows Gmail naming and change semantics closely;
+- `gog` watch payloads currently include:
+  - top-level `historyId`
+  - top-level `deletedMessageIds`
+  - per-message `id`, `threadId`, `from`, `to`, `subject`, `date`, `snippet`, `body`, `bodyTruncated`, `labels`;
+- current OpenClaw Gmail hooks consume only a reduced summary projection of that provider surface.
+
+Working consequence:
+
+- treat the current OpenClaw Gmail hook shape as an implementation detail, not the canonical email model;
+- keep Gmail-native fields and mailbox/Maildir-native fields preserved in the adaptation layer even when OpenClaw does not yet consume them directly.
+
+#### 17.11.8. Immediate Gmail / `gog` value already available
+
+The most interesting Gmail-native fields already available from `gog`, but not currently used by the default OpenClaw Gmail hook mapping, are:
+
+- `threadId`
+- `labels`
+- `to`
+- `date`
+- `historyId`
+- `deletedMessageIds`
+- `bodyTruncated`
+
+These support immediate or near-immediate value:
+
+- `labels`
+  - show placement/category chips;
+  - prioritize `STARRED`, `IMPORTANT`, and inbox-like mail sooner;
+  - suppress or de-emphasize `SPAM` and `TRASH`.
+- `threadId`
+  - enable simple dedupe and "same conversation" hints without making rich threading a first-phase blocker.
+- `to`
+  - support direct-vs-list heuristics.
+- `date`
+  - improve recency ordering and time-window policies.
+- `historyId`
+  - provide replay and incremental-sync anchors.
+- `deletedMessageIds`
+  - preserve deletion events even when no message summary accompanies them.
+- `bodyTruncated`
+  - mark partial bodies explicitly so downstream ranking and display do not over-trust preview text.
+
+Current implication:
+
+- OpenClaw can extract more immediate operational value from the Gmail-native path before any major architectural change;
+- the richer source surface should still be normalized into canonical fields rather than treated as a new Gmail-specific product model.
+
+### 17.12. Source adapter contract and implementation suggestion
+
+Implementation questions should be phrased from requirements and proposed architecture, not from today’s hook shape alone.
+
+#### 17.12.1. Required adapter outputs
+
+Any first-phase source adapter should emit at least:
+
+- identity:
+  - `source_account_id`
+  - `provider_message_id` when available
+  - `internet_message_id` when present
+- content and participants:
+  - `subject`
+  - `snippet` or equivalent summary
+  - `body_text` when cheaply available
+  - `body_is_partial` when known
+  - `from_address`
+  - `to_addresses`
+  - `date_header_at` when available
+- placement and state:
+  - `mailbox_memberships`
+  - `is_read`
+  - `is_flagged`
+  - `is_draft`
+  - `is_in_spam`
+  - `is_in_trash`
+- sync and replay:
+  - `sync_observed_at`
+  - `sync_origin`
+  - `provider_history_id` when available
+  - `source_change_type` when available
+
+#### 17.12.2. Options
+
+Option A: keep OpenClaw’s current summary-level Gmail hook shape as the effective adapter.
+
+Pros:
+
+- no additional integration work;
+- fast path to wake-and-summarize behavior.
+
+Cons:
+
+- loses Gmail-native fields that are already available;
+- weak replay and audit foundation;
+- forces later schema and adapter churn.
+
+Option B: add a richer Gmail-native adapter on top of the existing `gog` watch payload, while keeping the current wake path.
+
+Pros:
+
+- low-risk, incremental improvement;
+- uses fields already available from `gog`;
+- preserves current OpenClaw ergonomics while improving canonical field coverage.
+
+Cons:
+
+- still Gmail-first;
+- still requires later Maildir-side normalization work.
+
+Option C: wait and design only around Maildir ingest.
+
+Pros:
+
+- strongest local replay and provider-independence story.
+
+Cons:
+
+- delays immediate OpenClaw-visible gains from Gmail;
+- throws away a rich provider-native source that already exists.
+
+#### 17.12.3. Suggested first implementation
+
+Recommended path:
+
+- take Option B now;
+- keep the existing OpenClaw Gmail hook as the wake and display trigger;
+- add a richer adapter that preserves:
+  - `historyId`
+  - `deletedMessageIds`
+  - `threadId`
+  - `to`
+  - `date`
+  - `labels`
+  - `bodyTruncated`;
+- normalize those fields into the canonical model;
+- keep Maildir as the first replay substrate;
+- treat Gmail history as supplemental incremental-sync and audit evidence.
+
+Why this is the best current suggestion:
+
+- it satisfies the settled Maildir-first replay decision;
+- it uses verified `gog` capabilities already on hand;
+- it improves OpenClaw behavior without binding the project to Gmail as the canonical model;
+- it reduces later adapter churn by preserving more source truth now.

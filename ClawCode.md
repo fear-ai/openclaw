@@ -199,3 +199,43 @@ Practical implication:
 
 - session-local model visibility belongs in runtime surfaces
 - historical or comparative usage analysis should be treated as sidecar or external-analysis work
+
+### 4.8. Gmail hook payload reality
+
+Direct review of the current `gog` source and docs confirms that the Gmail watch hook surface is richer than the default OpenClaw hook mapping currently uses.
+
+Verified `gog` watch payload elements:
+
+- top-level:
+  - `historyId`
+  - `deletedMessageIds`
+- per-message:
+  - `id`
+  - `threadId`
+  - `from`
+  - `to`
+  - `subject`
+  - `date`
+  - `snippet`
+  - `body`
+  - `bodyTruncated`
+  - `labels`
+
+Current OpenClaw default Gmail hook mapping only consumes:
+
+- `messages[0].id`
+- `messages[0].from`
+- `messages[0].subject`
+- `messages[0].snippet`
+- `messages[0].body`
+
+Practical implication:
+
+- OpenClaw is currently treating the Gmail hook as a summary wake surface rather than a richer mailbox-state surface;
+- exposing more of the already-available `gog` payload is a low-risk implementation win before deeper adapter work.
+
+Relevant files:
+
+- `src/gateway/hooks-mapping.ts`
+- `src/hooks/gmail.ts`
+- `src/config/types.hooks.ts`
