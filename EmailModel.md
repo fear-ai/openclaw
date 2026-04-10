@@ -411,6 +411,15 @@ Examples:
 
 Do not collapse them into generic fields when semantics differ.
 
+Service, configuration, and credential ownership should also remain explicit:
+
+- keep mailbox credentials distinct from watch/webhook runtime settings;
+- keep IMAP/SMTP passwords or app passwords distinct from OAuth refresh tokens;
+- keep OAuth client credentials distinct from refresh-token storage;
+- keep receive-path credentials distinct from send-path credentials when the tool exposes both;
+- keep service-account credentials distinct from end-user OAuth refresh tokens;
+- do not treat a shared config root as evidence that all configuration and credential concerns have the same owner.
+
 ### 8.2. Mailbox-native abstractions
 
 Map provider folders, IMAP mailboxes, and Maildir placement into `mailbox_memberships`.

@@ -28,9 +28,11 @@ Use `gog` for Gmail/Calendar/Drive/Contacts/Sheets/Docs. Requires OAuth setup.
 
 Setup (once)
 
-- `gog auth credentials /path/to/client_secret.json`
-- `gog auth add you@gmail.com --services gmail,calendar,drive,contacts,docs,sheets`
+- `gog auth credentials set /path/to/client_secret.json`
+- `gog auth add you@gmail.com --services gmail --readonly`
 - `gog auth list`
+- `gog auth tokens export you@gmail.com --out ./you.json`
+- `gog auth tokens import ./you.json`
 
 Common commands
 

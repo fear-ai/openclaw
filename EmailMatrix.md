@@ -12,11 +12,15 @@
   - [4.4. Sync and replay](#44-sync-and-replay)
 - [5. Behavior Concordance](#5-behavior-concordance)
 - [6. OpenClaw-Relevant Gaps](#6-openclaw-relevant-gaps)
-- [7. Reviewed Product Notes](#7-reviewed-product-notes)
-  - [7.1. inbox-zero concordance](#71-inbox-zero-concordance)
-  - [7.2. gmailsorter concordance](#72-gmailsorter-concordance)
-  - [7.3. Hermes concordance](#73-hermes-concordance)
-- [8. References](#8-references)
+- [7. Configuration And Credential Concordance](#7-configuration-and-credential-concordance)
+  - [7.1. Standalone `gog`](#71-standalone-gog)
+  - [7.2. OpenClaw using `gog`](#72-openclaw-using-gog)
+  - [7.3. Himalaya and Neverest](#73-himalaya-and-neverest)
+- [8. Reviewed Product Notes](#8-reviewed-product-notes)
+  - [8.1. inbox-zero concordance](#81-inbox-zero-concordance)
+  - [8.2. gmailsorter concordance](#82-gmailsorter-concordance)
+  - [8.3. Hermes concordance](#83-hermes-concordance)
+- [9. References](#9-references)
 
 ## 1. Purpose
 
@@ -150,9 +154,68 @@ The adaptation path is therefore:
 2. add a richer adapter for canonical field extraction;
 3. persist provider-native ids and change anchors before deriving product state.
 
-## 7. Reviewed Product Notes
+## 7. Configuration And Credential Concordance
 
-### 7.1. `inbox-zero` concordance
+### 7.1. Standalone `gog`
+
+| Configuration or credential concern | `gog` native behavior | Notes |
+| --- | --- | --- |
+| Config root | macOS: `~/Library/Application Support/gogcli/`; Linux: `~/.config/gogcli/` or `$XDG_CONFIG_HOME/gogcli/` | verified from `gog config path` and `internal/config/paths.go` |
+| OAuth client credentials | stored on disk as `credentials.json` for the default client or `credentials-<client>.json` for named clients | contains `client_id` and `client_secret`, not refresh tokens |
+| Refresh token storage | stored in the selected keyring backend under keys like `token:<client>:<email>` | verified by `gog auth list` and `internal/secrets/store.go` |
+| Installed auth CLI surface | `gog auth credentials set`, `gog auth add --readonly`, `gog auth tokens export`, `gog auth tokens import`, `gog auth keyring auto|keychain|file` | current installed CLI is `gog v0.9.0`; local instructions should follow this syntax rather than newer drifted examples |
+| Default keyring mode | `auto` | current local state is `auto` |
+| Keyring backend options | `auto`, `keychain`, `file` | `file` stores encrypted entries on disk under the `keyring/` directory |
+| File-backend password source | `GOG_KEYRING_PASSWORD` | required for non-interactive file-backed runs |
+| Service-account credentials | stored as `sa-<encoded-email>.json` in the config dir | takes precedence over OAuth refresh-token auth when configured |
+| Watch state | stored separately under `state/gmail-watch` | no current local watch state was present |
+| Current local secret inventory | Keychain refresh-token entries are present for `alphaeosnet@gmail.com`, `moonshotcol@gmail.com`, `wallyb33@gmail.com`, and `tearodactylus@gmail.com` | this reflects current local secret material, whether or not every account has already been revalidated by live mailbox commands |
+| Portable token exports | per-account JSON exports include `client`, `email`, `created_at`, `refresh_token`, `services`, `scopes` | importable with `gog auth tokens import`; preferred over the older raw `gogcli_*.json` shape |
+| Legacy raw token files | older `gogcli_*.json` files may contain only `created_at`, `refresh_token`, `services`, `scopes` | keep for archive/recovery, but prefer the newer export shape for restore |
+
+Archival implications:
+
+- exporting `gog` state requires both the config dir and the secret backend material;
+- on macOS Keychain, the important refresh-token entries are outside the config dir;
+- switching `gog` to the `file` backend produces a more portable archiveable tree, but changes the trust and password-management model.
+
+### 7.2. OpenClaw using `gog`
+
+| Configuration or credential concern | OpenClaw behavior | Notes |
+| --- | --- | --- |
+| Gmail account identity | stored as `hooks.gmail.account` | OpenClaw passes the selected account to `gog` |
+| Gmail runtime settings | stored under `hooks.gmail.*` | includes topic, subscription, push token, hook token, hook URL, body inclusion, size cap, renew interval, and local serve settings |
+| OAuth client credentials | not stored by OpenClaw | OpenClaw relies on standalone `gog` auth setup |
+| Refresh tokens | not stored by OpenClaw | no separate Gmail credential store was found in current OpenClaw config |
+| Current local config state | no email/Gmail/`gog`/Himalaya/Neverest keys in either `~/.openclaw/openclaw.json` or `~/.openclaw-repo/openclaw.json` | OpenClaw is not currently configured for Gmail on this machine |
+| Credential duplication | none today | OpenClaw shells out to `gog` rather than mirroring Gmail auth state |
+
+Adaptation implication:
+
+- OpenClaw should treat `gog` auth state as an external dependency and keep its own config limited to hook/watch runtime state unless a deliberate credential-ownership change is made later.
+
+### 7.3. Himalaya and Neverest
+
+| Configuration or credential concern | Himalaya | Neverest | Notes |
+| --- | --- | --- | --- |
+| Primary role | mailbox client | backend-to-backend sync tool | complementary rather than interchangeable |
+| Config structure | one account with mailbox + send backends | one account with `left` and `right` backends | not directly config-compatible |
+| Shared account concepts | email/login, folder aliases, auth modes | email/login, folder aliases, auth modes | similar because both come from the Pimalaya ecosystem |
+| Current local account inventory | `alphaeosnet`, `moonshotcol`, `wallyb33`, `tearodactylus` | same four accounts | broader than the current standalone `gog` account set |
+| Current secret retrieval mode | `backend.auth.cmd` and send auth command using macOS `security find-generic-password` | `right.backend.auth.cmd` using macOS `security find-generic-password` | credentials are not stored inline today |
+| Current local secret type | Gmail app passwords for IMAP and SMTP paths | mailbox password/app-password for the remote side | current local Himalaya usage is password-based, not OAuth2-based |
+| Supported auth alternatives | `auth.raw`, `auth.cmd`, `auth.keyring`, OAuth2 variants including `oauthbearer` and `xoauth2` | `auth.raw`, `auth.cmd`, `auth.keyring`, OAuth2 variants | confirmed from the checked source/docs |
+| OAuth2 secret surface | supports client/refresh/access-token style OAuth2 secrets and keyring-backed storage | supports OAuth2-capable backend auth configuration on the remote side | capability exists even though the local setup uses app passwords |
+| Single-source maintenance viability | possible only via generation from a higher-level inventory | possible only via generation from a higher-level inventory | one shared hand-maintained `config.toml` is not realistic |
+
+Operational conclusion:
+
+- Himalaya and Neverest should be treated as two generated projections of one account inventory if unified maintenance is desired;
+- the current machine state uses macOS Keychain indirectly via shell commands rather than via their built-in `keyring` modes.
+
+## 8. Reviewed Product Notes
+
+### 8.1. `inbox-zero` concordance
 
 | `inbox-zero` model or concept | Closest canonical domain or element | Inclusion decision | Notes |
 | --- | --- | --- | --- |
@@ -170,7 +233,7 @@ Summary:
 - is much broader than the canonical email substrate;
 - should be mined for product entities and action history, not copied as the canonical base.
 
-### 7.2. `gmailsorter` concordance
+### 8.2. `gmailsorter` concordance
 
 | `gmailsorter` model or concept | Closest canonical domain or element | Inclusion decision | Notes |
 | --- | --- | --- | --- |
@@ -187,7 +250,7 @@ Summary:
 - stores useful message, thread, label, participant, token, and ML artifacts;
 - uses implementation-specific partitioning and naming that should not become canonical.
 
-### 7.3. Hermes concordance
+### 8.3. Hermes concordance
 
 | Hermes surface or concept | Closest canonical domain or element | Inclusion decision | Notes |
 | --- | --- | --- | --- |
@@ -209,12 +272,17 @@ Summary:
 
 These product-specific comparisons can expand here later without changing the canonical model in `EmailModel.md`.
 
-## 8. References
+## 9. References
 
 - OpenClaw Gmail mapping and runtime config:
   - `src/gateway/hooks-mapping.ts`
   - `src/hooks/gmail.ts`
   - `src/config/types.hooks.ts`
+- `gog` config and auth storage:
+  - https://github.com/steipete/gogcli/blob/4067cc6e570fdc70d6ef19d1f20a1f0d10b54a82/README.md
+  - https://github.com/steipete/gogcli/blob/4067cc6e570fdc70d6ef19d1f20a1f0d10b54a82/docs/spec.md
+  - https://github.com/steipete/gogcli/blob/4067cc6e570fdc70d6ef19d1f20a1f0d10b54a82/internal/config/paths.go
+  - https://github.com/steipete/gogcli/blob/4067cc6e570fdc70d6ef19d1f20a1f0d10b54a82/internal/secrets/store.go
 - `gog` watch docs:
   - https://github.com/steipete/gogcli/blob/4067cc6e570fdc70d6ef19d1f20a1f0d10b54a82/docs/watch.md
 - `gog` watch implementation:

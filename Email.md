@@ -69,6 +69,9 @@ Document-inclusion rule for this set:
 - `EmailModel.md` and `EmailMatrix.md` should stay mostly self-contained and should reference `Email.md` only when a direct pointer materially improves clarity.
 - `Priorai.md` may reference `Email.md` sections occasionally because email is the first proving ground, but `Email.md` should remain readable on its own.
 - Avoid duplicating long field catalogs, behavior lists, or mapping tables in multiple documents. Put the full version in one place, then point to it.
+- All modification and integration planning, task lists, implementation options, sequencing, reasoning, and justifications for email work belong in this OpenClaw-maintained email document set, even when the subject is an external repo such as `gogcli`, `himalaya`, `neverest`, or other reviewed products.
+- `Emails.md` in the sibling research workspace is ecosystem inventory only. It may capture standards, products, repos, history, adoption, features, build/install shape, code overview, and broader opportunity signals, but it should not become a planning, integration, or implementation document.
+- Keep the linkage one-way: this document set may cite or summarize findings from `Emails.md`, but `Emails.md` should not backlink into the OpenClaw-maintained email docs.
 
 In practice, use this split:
 
@@ -265,6 +268,25 @@ This section captures current execution confidence, distinguishing verified beha
   - per-message `id`, `threadId`, `from`, `to`, `subject`, `date`, `snippet`, `body`, `bodyTruncated`, `labels`
   - supported history types: `messageAdded`, `messageDeleted`, `labelAdded`, `labelRemoved`
   - default excluded labels: `SPAM`, `TRASH`
+- standalone `gog` auth and config state was inspected directly:
+  - config root on this machine: `~/Library/Application Support/gogcli/`
+  - current keyring mode: `auto`
+  - shared OAuth client credentials are on disk in `credentials.json`, while refresh tokens are stored separately in the keyring backend
+  - Keychain refresh-token entries are present for `alphaeosnet@gmail.com`, `moonshotcol@gmail.com`, `wallyb33@gmail.com`, and `tearodactylus@gmail.com`
+  - export-style per-account token files are also present in `~/.gogcli/` with keys `client`, `email`, `created_at`, `refresh_token`, `services`, and `scopes`
+  - older raw token files are also present there as `gogcli_*.json`, with `created_at`, `refresh_token`, `services`, and `scopes`
+  - installed CLI syntax last verified on `gog v0.9.0`:
+    - `gog auth credentials set <credentials.json>`
+    - `gog auth add <email> --services gmail --readonly`
+    - `gog auth tokens export <email> --out <file>`
+    - `gog auth tokens import <file>`
+- current Himalaya and Neverest account configuration was inspected directly:
+  - both define `alphaeosnet`, `moonshotcol`, `wallyb33`, and `tearodactylus`
+  - both currently retrieve credentials through macOS `security find-generic-password ...` commands rather than storing secrets inline
+  - current local Himalaya auth is Gmail app-password based for both IMAP and SMTP paths
+  - Himalaya also supports OAuth2 auth modes such as `xoauth2` and `oauthbearer`, but that is not the local configuration now
+- current OpenClaw config state was inspected directly:
+  - neither `~/.openclaw/openclaw.json` nor `~/.openclaw-repo/openclaw.json` currently contains email, Gmail, `gog`, Himalaya, or Neverest configuration
 - `gog auth add` failure mode was reproduced:
   - `Error 403: org_internal`
   - root cause: OAuth client/consent audience policy mismatch.
@@ -272,7 +294,7 @@ This section captures current execution confidence, distinguishing verified beha
 ### 8.2. Partially validated
 
 - Google Cloud + Gmail OAuth command path and failure diagnostics are clear.
-- First successful Gmail account authorization and first mailbox operation are still pending in this workspace.
+- First complete standalone `gog` mailbox-validation pass is still pending in this workspace.
 - Himalaya IMAP path architecture is reviewed, but full read/send roundtrip remains pending.
 - Role decision remains open:
   - `gog` as primary with IMAP fallback,
@@ -286,6 +308,12 @@ This section captures current execution confidence, distinguishing verified beha
 
 Validation conclusion:
 the architecture direction is viable, but promotion beyond low-risk automation remains contingent on multi-account run evidence and end-to-end fallback testing.
+
+Operational configuration conclusion:
+
+- standalone `gog` is already the live Gmail auth owner on this machine;
+- Himalaya and Neverest are already the live IMAP/Maildir auth owners on this machine;
+- OpenClaw is not yet configured locally for email and should be treated as an orchestrator that invokes or receives events from those tools rather than as the current owner of mailbox credentials.
 
 ## 9. Implementation Options
 
@@ -1883,6 +1911,68 @@ Deliverables:
 - list of missing fields, ambiguous fields, and unexpectedly shaped values;
 - notes on local operational friction and failure modes.
 
+Execution order:
+
+1. direct standalone `gog` validation on one authenticated account;
+2. direct synthetic OpenClaw hook validation using the richer Gmail payload shape;
+3. real `gog gmail watch serve` forwarding into the repo-profile gateway;
+4. one real Gmail message event through the patched hook path;
+5. mailbox-native validation with Himalaya against one existing mirrored account.
+
+Direct standalone `gog` validation should include:
+
+- `gog auth credentials list --json`
+- `gog auth list --json`
+- `gog auth list --check --json`
+- `gog auth status --account <email> --json`
+- `gog gmail labels list --account <email> --json`
+- `gog gmail search 'in:inbox newer_than:7d' --account <email> --json --max 10`
+- `gog gmail search 'label:starred is:unread' --account <email> --json --max 10`
+- `gog gmail get <message-id> --account <email> --json --include-body`
+- `gog gmail watch status --account <email> --json`
+- `gog gmail history --account <email> --since <historyId> --json`
+
+Installed CLI forms that should be used for setup and archival in this workspace:
+
+- `gog auth credentials set <credentials.json>`
+- `gog auth add <email> --services gmail --readonly`
+- `gog auth tokens export <email> --out <file>`
+- `gog auth tokens import <file>`
+- `gog auth keyring auto|keychain|file`
+
+The direct `gog` pass is successful only when:
+
+- auth is healthy for the selected account;
+- label listing succeeds;
+- recent message search succeeds;
+- one message body fetch succeeds;
+- watch status and history behavior are understood well enough to explain the current provider state.
+
+OpenClaw hook validation should include:
+
+- one synthetic rich payload POST to `/hooks/gmail`;
+- one synthetic deletion-only payload POST to `/hooks/gmail`;
+- one real `gog gmail watch serve` run into the repo-profile gateway.
+
+The OpenClaw hook pass is successful only when the built-in Gmail preset exposes:
+
+- `threadId`
+- `to`
+- `date`
+- `labels`
+- `bodyTruncated`
+- `historyId`
+- `deletedMessageIds`
+
+Mailbox-native validation should include:
+
+- mailbox listing
+- message read
+- star / flagged state
+- draft visibility
+- spam / trash placement
+- header availability needed for auth and mailing-list heuristics
+
 Acceptance criteria:
 
 - first successful mailbox operations and field extraction are documented;
@@ -1951,6 +2041,55 @@ Apply these rules throughout the sequence:
    - source truth,
    - normalized canonical state,
    - product-owned feedback and scoring state.
+
+#### 17.10.9. Step 8: Clean out or redistribute Claw-specific references
+
+Objective:
+
+- keep `Email.md` centered on the email subject while moving general OpenClaw-only framing, planning overlap, or duplicated implementation notes to the more appropriate OpenClaw documents or supporting email docs.
+
+Deliverables:
+
+- an audit of `Claw` / `OpenClaw` references across `Email.md`;
+- an audit of `Emails.md` sections that still behave like planning or implementation guidance rather than reference material;
+- a list of references that are:
+  - necessary because they define the current integration boundary,
+  - better moved into `Claw.md`, `ClawPlan.md`, or `ClawCode.md`,
+  - better reduced to a short implication inside `Email.md`,
+  - better moved into `EmailModel.md` or `EmailMatrix.md`;
+- a reduced and cleaner `Email.md` that still preserves the necessary OpenClaw-facing implications for email work.
+
+Acceptance criteria:
+
+- `Email.md` reads primarily as the central email document, not as a second OpenClaw overview;
+- OpenClaw-specific references remain only where they clarify:
+  - current integration constraints,
+  - current implementation choices,
+  - or immediate email-facing work;
+- duplicated or generic OpenClaw framing is removed or redistributed;
+- planning leakage in `Emails.md` is either removed or reduced to repo-level implications;
+- the remaining OpenClaw references are intentional and easier to maintain.
+
+#### 17.10.10. Step 9: Normalize document structure and cross-reference style
+
+Objective:
+
+- make the maintained document set easier to navigate, compare, and reference precisely by using one consistent sectioning and linking style.
+
+Deliverables:
+
+- all maintained documents use the same numbered section and subsection structure;
+- each maintained document has a table of contents near the top;
+- cross-references point directly to the specific target section or subsection rather than only to a document, except when listing documents in a documentation map;
+- documentation maps continue to list documents directly without over-linking every entry to a subsection.
+
+Acceptance criteria:
+
+- each maintained document has a visible and consistent numbered hierarchy;
+- each maintained document has a ToC that matches the numbered hierarchy;
+- intra-doc and cross-doc references are specific enough to land on the intended section or subsection;
+- document maps remain simple document listings rather than turning into deep link indexes;
+- the maintained docs read as one coherent set instead of mixed styles assembled over time.
 
 ### 17.11. Current working resolutions
 

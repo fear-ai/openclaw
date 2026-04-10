@@ -125,6 +125,23 @@ Relevant file:
 
 - `src/agents/cli-credentials.ts`
 
+### 4.3.1. Current email and `gog` config reality
+
+- current local OpenClaw configs in `~/.openclaw/openclaw.json` and `~/.openclaw-repo/openclaw.json` contain no email, Gmail, `gog`, Himalaya, or Neverest settings;
+- when Gmail hooks are configured, OpenClaw stores hook runtime state under `hooks.gmail.*` and shells out to `gog`;
+- standalone `gog` owns Gmail OAuth client credentials and refresh-token storage today;
+- current local `gog` secret inventory includes Keychain refresh-token entries for `alphaeosnet@gmail.com`, `moonshotcol@gmail.com`, `wallyb33@gmail.com`, and `tearodactylus@gmail.com`;
+- local archival material also includes export-style per-account token JSON files plus older raw `gogcli_*.json` token files;
+- installed `gog` CLI syntax last verified here is:
+  - `gog auth credentials set <credentials.json>`
+  - `gog auth add <email> --services gmail --readonly`
+  - `gog auth tokens export <email> --out <file>`
+  - `gog auth tokens import <file>`
+
+Practical implication:
+
+- current OpenClaw Gmail integration should be treated as dependent on preconfigured external `gog` auth state rather than as an OpenClaw-owned credential surface.
+
 ### 4.4. Gateway runtime behavior observed
 
 - the artifact mismatch incident was runtime/process consistency, not compile failure

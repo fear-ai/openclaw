@@ -79,6 +79,21 @@ That target state should be treated as the base environment for the next several
 ### 7. Email integration testing and boundary work
 
 - Validate the Gmail-native path with `gog` as the first OpenClaw-facing email integration path.
+- Start with direct standalone `gog` validation before involving OpenClaw:
+  - `gog auth list --json`
+  - `gog auth list --check --json`
+  - `gog auth status --account <email> --json`
+  - `gog gmail labels list --account <email> --json`
+  - `gog gmail search 'in:inbox newer_than:7d' --account <email> --json --max 10`
+  - `gog gmail search 'label:starred is:unread' --account <email> --json --max 10`
+  - `gog gmail get <message-id> --account <email> --json --include-body`
+  - `gog gmail watch status --account <email> --json`
+  - `gog gmail history --account <email> --since <historyId> --json`
+- Treat direct `gog` validation as passed only when:
+  - account auth is healthy;
+  - labels and recent message search work;
+  - one full message fetch with body succeeds;
+  - watch status and history access are understood for at least one account.
 - Verify and expose the richer `gog` Gmail hook fields already available upstream:
   - `historyId`
   - `deletedMessageIds`
@@ -87,8 +102,32 @@ That target state should be treated as the base environment for the next several
   - `date`
   - `labels`
   - `bodyTruncated`
+- Validate the patched OpenClaw Gmail hook path in this order:
+  - direct synthetic POST to `/hooks/gmail` with a rich message payload;
+  - direct synthetic POST to `/hooks/gmail` with a deletion-only payload;
+  - real `gog gmail watch serve` forwarding into the repo-profile gateway;
+  - one real Gmail message event through the same path.
+- Treat the OpenClaw hook validation as passed only when the built-in preset visibly includes:
+  - `threadId`
+  - `to`
+  - `date`
+  - `labels`
+  - `bodyTruncated`
+  - `historyId`
+  - `deletedMessageIds`
 - Run mailbox-interaction tests with `himalaya` as the secondary interaction layer.
+- Use one existing Himalaya/Neverest-backed account to validate:
+  - mailbox listing
+  - message read
+  - star / flagged state
+  - draft visibility
+  - spam / trash placement
+  - header availability needed for auth/list heuristics
 - Use the current repo-profile environment under `~/.openclaw-repo` as the place where those integration tests are exercised and recorded.
+- Wire only one authenticated `gog` account into `hooks.gmail.*` for the first real OpenClaw run.
+- Keep the first real integration question narrow:
+  - is the current richer summary sufficient for display and agent wake,
+  - or is a structured field handoff needed immediately?
 - Decide whether the first usable display boundary is:
   - `gog`-native for Gmail only
   - `himalaya` on top of Maildir
@@ -119,8 +158,10 @@ That target state should be treated as the base environment for the next several
 3. Review `NemoClaw`.
 4. Review `DenchClaw`.
 5. Review `Hermes` and Honcho.
-6. Validate `gog` and `himalaya` email integration paths inside the repo-profile environment.
-7. Commit to the first Maildir ingest and replay path.
+6. Run direct standalone `gog` validation on one real account.
+7. Validate the patched OpenClaw Gmail hook path with synthetic payloads, then with real `gog gmail watch serve`.
+8. Run `himalaya` mailbox-interaction validation against one existing mirrored account.
+9. Commit to the first Maildir ingest and replay path.
 
 ## Review Order
 
