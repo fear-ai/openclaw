@@ -7,7 +7,26 @@ import { applyHookMappings, resolveHookMappings } from "./hooks-mapping.js";
 const baseUrl = new URL("http://127.0.0.1:18789/hooks/gmail");
 
 describe("hooks mapping", () => {
-  const gmailPayload = { messages: [{ subject: "Hello" }] };
+  const gmailPayload = {
+    source: "gmail",
+    account: "agent@example.com",
+    historyId: "12345",
+    deletedMessageIds: ["deadbeef"],
+    messages: [
+      {
+        id: "msg-1",
+        threadId: "thread-1",
+        from: "alice@example.com",
+        to: "agent@example.com",
+        subject: "Hello",
+        date: "2026-04-08T12:00:00Z",
+        snippet: "Short preview",
+        body: "Full body",
+        bodyTruncated: true,
+        labels: ["INBOX", "STARRED"],
+      },
+    ],
+  };
 
   function expectSkippedTransformResult(result: Awaited<ReturnType<typeof applyHookMappings>>) {
     expect(result?.ok).toBe(true);
@@ -114,6 +133,48 @@ describe("hooks mapping", () => {
     const mappings = resolveHookMappings({ presets: ["gmail"] });
     expect(mappings.length).toBeGreaterThan(0);
     expect(mappings[0]?.matchPath).toBe("gmail");
+  });
+
+  it("renders the built-in gmail preset from the richer gog payload surface", async () => {
+    const mappings = resolveHookMappings({ presets: ["gmail"] });
+    const result = await applyHookMappings(mappings, {
+      payload: gmailPayload,
+      headers: {},
+      url: baseUrl,
+      path: "gmail",
+    });
+    expect(result?.ok).toBe(true);
+    if (result?.ok && result.action?.kind === "agent") {
+      expect(result.action.sessionKey).toBe("hook:gmail:msg-1");
+      expect(result.action.message).toContain("New email from alice@example.com");
+      expect(result.action.message).toContain("To: agent@example.com");
+      expect(result.action.message).toContain("Thread: thread-1");
+      expect(result.action.message).toContain("Labels: INBOX, STARRED");
+      expect(result.action.message).toContain("[body truncated]");
+      expect(result.action.message).toContain("History: 12345");
+      expect(result.action.message).toContain("Deleted IDs: deadbeef");
+    }
+  });
+
+  it("handles deletion-only gmail watch batches in the built-in preset", async () => {
+    const mappings = resolveHookMappings({ presets: ["gmail"] });
+    const result = await applyHookMappings(mappings, {
+      payload: {
+        source: "gmail",
+        historyId: "99",
+        deletedMessageIds: ["gone-1", "gone-2"],
+      },
+      headers: {},
+      url: baseUrl,
+      path: "gmail",
+    });
+    expect(result?.ok).toBe(true);
+    if (result?.ok && result.action?.kind === "agent") {
+      expect(result.action.sessionKey).toBe("hook:gmail:history:99");
+      expect(result.action.message).toContain("Gmail mailbox update");
+      expect(result.action.message).toContain("History: 99");
+      expect(result.action.message).toContain("Deleted IDs: gone-1, gone-2");
+    }
   });
 
   it("renders template from payload", async () => {
