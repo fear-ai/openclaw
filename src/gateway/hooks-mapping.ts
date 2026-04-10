@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CONFIG_PATH, type HookMappingConfig, type HooksConfig } from "../config/config.js";
+import { buildGmailHookTemplateScope } from "../hooks/gmail-payload.js";
 import { importFileModule, resolveFunctionModuleExport } from "../hooks/module-loader.js";
 import { normalizeOptionalString, readStringValue } from "../shared/string-coerce.js";
 import type { HookMessageChannel } from "./hooks.js";
@@ -73,9 +74,8 @@ const hookPresetMappings: Record<string, HookMappingConfig[]> = {
       action: "agent",
       wakeMode: "now",
       name: "Gmail",
-      sessionKey: "hook:gmail:{{messages[0].id}}",
-      messageTemplate:
-        "New email from {{messages[0].from}}\nSubject: {{messages[0].subject}}\n{{messages[0].snippet}}\n{{messages[0].body}}",
+      sessionKey: "hook:gmail:{{gmail.eventKey}}",
+      messageTemplate: "{{gmail.summary}}",
     },
   ],
 };
@@ -467,6 +467,16 @@ function resolveTemplateExpr(expr: string, ctx: HookMappingContext) {
   }
   if (expr === "now") {
     return new Date().toISOString();
+  }
+  if (expr === "gmail" || expr.startsWith("gmail.")) {
+    const gmail = buildGmailHookTemplateScope(ctx.payload);
+    if (!gmail) {
+      return undefined;
+    }
+    if (expr === "gmail") {
+      return gmail;
+    }
+    return getByPath(gmail as Record<string, unknown>, expr.slice("gmail.".length));
   }
   if (expr.startsWith("headers.")) {
     return getByPath(ctx.headers, expr.slice("headers.".length));
