@@ -84,10 +84,19 @@ function mergeGatewayServiceEnv(
   if (!command?.environment) {
     return baseEnv;
   }
-  return {
+  const merged: GatewayServiceEnv = {
     ...baseEnv,
     ...command.environment,
   };
+  // Service manager metadata lives in the signed-in user's host home, not the
+  // service runtime HOME that a pack may inject for isolation.
+  if (typeof baseEnv.HOME === "string" && baseEnv.HOME.trim()) {
+    merged.HOME = baseEnv.HOME;
+  }
+  if (typeof baseEnv.USERPROFILE === "string" && baseEnv.USERPROFILE.trim()) {
+    merged.USERPROFILE = baseEnv.USERPROFILE;
+  }
+  return merged;
 }
 
 export async function readGatewayServiceState(

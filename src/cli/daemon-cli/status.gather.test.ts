@@ -241,6 +241,32 @@ describe("gatherDaemonStatus", () => {
     expect(loadConfigCalls).not.toHaveBeenCalled();
   });
 
+  it("keeps host HOME when inspecting a service that overrides HOME for runtime isolation", async () => {
+    process.env.HOME = "/Users/test";
+    serviceReadCommand.mockResolvedValueOnce({
+      programArguments: ["/bin/node", "cli", "gateway", "--port", "19001"],
+      environment: {
+        HOME: "/packs/apr20/openclaw/home",
+        OPENCLAW_STATE_DIR: "/tmp/openclaw-daemon",
+        OPENCLAW_CONFIG_PATH: "/tmp/openclaw-daemon/openclaw.json",
+      },
+    });
+
+    await gatherDaemonStatus({
+      rpc: {},
+      probe: true,
+      deep: false,
+    });
+
+    expect(serviceReadRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        HOME: "/Users/test",
+        OPENCLAW_STATE_DIR: "/tmp/openclaw-daemon",
+        OPENCLAW_CONFIG_PATH: "/tmp/openclaw-daemon/openclaw.json",
+      }),
+    );
+  });
+
   it("defaults unset daemon bind mode to loopback for host-side status reporting", async () => {
     daemonLoadedConfig = {
       gateway: {

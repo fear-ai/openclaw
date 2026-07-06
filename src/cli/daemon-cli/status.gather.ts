@@ -128,6 +128,29 @@ function appendProbeNote(
   }
   return [...new Set(values)].join(" ");
 }
+
+function mergeHostAndServiceEnv(
+  baseEnv: NodeJS.ProcessEnv,
+  serviceEnv?: Record<string, string>,
+): NodeJS.ProcessEnv {
+  if (!serviceEnv) {
+    return baseEnv;
+  }
+  const merged = {
+    ...baseEnv,
+    ...serviceEnv,
+  } satisfies NodeJS.ProcessEnv;
+  // LaunchAgent metadata lives in the signed-in user's host home, not the
+  // service runtime HOME that a pack may override for isolation.
+  if (typeof baseEnv.HOME === "string" && baseEnv.HOME.trim()) {
+    merged.HOME = baseEnv.HOME;
+  }
+  if (typeof baseEnv.USERPROFILE === "string" && baseEnv.USERPROFILE.trim()) {
+    merged.USERPROFILE = baseEnv.USERPROFILE;
+  }
+  return merged;
+}
+
 export type DaemonStatus = {
   logFile?: string;
   service: {
@@ -339,12 +362,7 @@ export async function gatherDaemonStatus(
 ): Promise<DaemonStatus> {
   const service = resolveGatewayService();
   const command = await service.readCommand(process.env).catch(() => null);
-  const serviceEnv = command?.environment
-    ? ({
-        ...process.env,
-        ...command.environment,
-      } satisfies NodeJS.ProcessEnv)
-    : process.env;
+  const serviceEnv = mergeHostAndServiceEnv(process.env, command?.environment);
   const [loaded, runtime] = await Promise.all([
     service.isLoaded({ env: serviceEnv }).catch(() => false),
     service.readRuntime(serviceEnv).catch((err) => ({ status: "unknown", detail: String(err) })),

@@ -79,6 +79,43 @@ describe("readGatewayServiceState", () => {
     expect(state.running).toBe(true);
     expect(state.env.OPENCLAW_GATEWAY_PORT).toBe("18789");
   });
+
+  it("preserves host HOME while still merging service configuration env", async () => {
+    const isLoaded = vi.fn(async () => true);
+    const readRuntime = vi.fn(async () => ({ status: "running" }));
+    const service = createService({
+      isLoaded,
+      readCommand: vi.fn(async () => ({
+        programArguments: ["openclaw", "gateway", "run"],
+        environment: {
+          HOME: "/packs/apr20/openclaw/home",
+          OPENCLAW_CONFIG_PATH: "/packs/apr20/openclaw/config/openclaw.json",
+        },
+      })),
+      readRuntime,
+    });
+
+    const state = await readGatewayServiceState(service, {
+      env: {
+        HOME: "/Users/test",
+        OPENCLAW_CONFIG_PATH: "/Users/test/.openclaw/openclaw.json",
+      },
+    });
+
+    expect(isLoaded).toHaveBeenCalledWith({
+      env: expect.objectContaining({
+        HOME: "/Users/test",
+        OPENCLAW_CONFIG_PATH: "/packs/apr20/openclaw/config/openclaw.json",
+      }),
+    });
+    expect(readRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        HOME: "/Users/test",
+        OPENCLAW_CONFIG_PATH: "/packs/apr20/openclaw/config/openclaw.json",
+      }),
+    );
+    expect(state.env.HOME).toBe("/Users/test");
+  });
 });
 
 describe("startGatewayService", () => {
