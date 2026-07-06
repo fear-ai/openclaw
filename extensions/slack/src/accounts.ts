@@ -30,6 +30,25 @@ const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("sl
 export const listSlackAccountIds = listAccountIds;
 export const resolveDefaultSlackAccountId = resolveDefaultAccountId;
 
+function isUnresolvedSecretRefError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("unresolved SecretRef");
+}
+
+function resolveSlackTokenSafely(
+  resolver: (raw?: unknown, path?: string) => string | undefined,
+  raw: unknown,
+  path: string,
+): string | undefined {
+  try {
+    return resolver(raw, path);
+  } catch (error) {
+    if (isUnresolvedSecretRefError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 export function mergeSlackAccountConfig(
   cfg: OpenClawConfig,
   accountId: string,
@@ -58,15 +77,18 @@ export function resolveSlackAccount(params: {
   const envBot = allowEnv ? resolveSlackBotToken(process.env.SLACK_BOT_TOKEN) : undefined;
   const envApp = allowEnv ? resolveSlackAppToken(process.env.SLACK_APP_TOKEN) : undefined;
   const envUser = allowEnv ? resolveSlackUserToken(process.env.SLACK_USER_TOKEN) : undefined;
-  const configBot = resolveSlackBotToken(
+  const configBot = resolveSlackTokenSafely(
+    resolveSlackBotToken,
     merged.botToken,
     `channels.slack.accounts.${accountId}.botToken`,
   );
-  const configApp = resolveSlackAppToken(
+  const configApp = resolveSlackTokenSafely(
+    resolveSlackAppToken,
     merged.appToken,
     `channels.slack.accounts.${accountId}.appToken`,
   );
-  const configUser = resolveSlackUserToken(
+  const configUser = resolveSlackTokenSafely(
+    resolveSlackUserToken,
     merged.userToken,
     `channels.slack.accounts.${accountId}.userToken`,
   );

@@ -8,6 +8,7 @@ import { isRecord } from "./shared.js";
 export type SecretResolverWarningCode =
   | "SECRETS_REF_OVERRIDES_PLAINTEXT"
   | "SECRETS_REF_IGNORED_INACTIVE_SURFACE"
+  | "SECRETS_REF_UNAVAILABLE_NONFATAL"
   | "WEB_SEARCH_PROVIDER_INVALID_AUTODETECT"
   | "WEB_SEARCH_AUTODETECT_SELECTED"
   | "WEB_SEARCH_KEY_UNRESOLVED_FALLBACK_USED"
@@ -27,6 +28,7 @@ export type SecretAssignment = {
   ref: SecretRef;
   path: string;
   expected: "string" | "string-or-object";
+  onUnavailable?: "throw" | "warn";
   apply: (value: unknown) => void;
 };
 
@@ -91,6 +93,7 @@ export function collectSecretInputAssignment(params: {
   context: ResolverContext;
   active?: boolean;
   inactiveReason?: string;
+  onUnavailable?: SecretAssignment["onUnavailable"];
   apply: (value: unknown) => void;
 }): void {
   const ref = coerceSecretRef(params.value, params.defaults);
@@ -109,6 +112,7 @@ export function collectSecretInputAssignment(params: {
     ref,
     path: params.path,
     expected: params.expected,
+    onUnavailable: params.onUnavailable,
     apply: params.apply,
   });
 }
@@ -116,21 +120,42 @@ export function collectSecretInputAssignment(params: {
 export function applyResolvedAssignments(params: {
   assignments: SecretAssignment[];
   resolved: Map<string, unknown>;
+  context?: ResolverContext;
 }): void {
   for (const assignment of params.assignments) {
     const key = secretRefKey(assignment.ref);
     if (!params.resolved.has(key)) {
+      if (assignment.onUnavailable === "warn" && params.context) {
+        pushWarning(params.context, {
+          code: "SECRETS_REF_UNAVAILABLE_NONFATAL",
+          path: assignment.path,
+          message: `${assignment.path}: SecretRef resolved to no value; leaving it unresolved so runtime channel checks can mark the account unconfigured.`,
+        });
+        continue;
+      }
       throw new Error(`Secret reference "${key}" resolved to no value.`);
     }
     const value = params.resolved.get(key);
-    assertExpectedResolvedSecretValue({
-      value,
-      expected: assignment.expected,
-      errorMessage:
-        assignment.expected === "string"
-          ? `${assignment.path} resolved to a non-string or empty value.`
-          : `${assignment.path} resolved to an unsupported value type.`,
-    });
+    try {
+      assertExpectedResolvedSecretValue({
+        value,
+        expected: assignment.expected,
+        errorMessage:
+          assignment.expected === "string"
+            ? `${assignment.path} resolved to a non-string or empty value.`
+            : `${assignment.path} resolved to an unsupported value type.`,
+      });
+    } catch (error) {
+      if (assignment.onUnavailable === "warn" && params.context) {
+        pushWarning(params.context, {
+          code: "SECRETS_REF_UNAVAILABLE_NONFATAL",
+          path: assignment.path,
+          message: `${assignment.path}: ${error instanceof Error ? error.message : String(error)} Leaving it unresolved so runtime channel checks can mark the account unconfigured.`,
+        });
+        continue;
+      }
+      throw error;
+    }
     assignment.apply(value);
   }
 }

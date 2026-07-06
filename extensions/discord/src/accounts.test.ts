@@ -78,6 +78,21 @@ describe("resolveDiscordAccount allowFrom precedence", () => {
 
     expect(resolved.config.allowFrom).toBeUndefined();
   });
+
+  it("treats unresolved SecretRef tokens as unavailable instead of throwing", () => {
+    const resolved = resolveDiscordAccount({
+      cfg: {
+        channels: {
+          discord: {
+            token: { source: "file", provider: "default", id: "/channels/discord/token" },
+          },
+        },
+      },
+    });
+
+    expect(resolved.token).toBe("");
+    expect(resolved.tokenSource).toBe("none");
+  });
 });
 
 describe("createDiscordActionGate", () => {

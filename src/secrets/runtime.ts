@@ -19,6 +19,7 @@ import {
 } from "../config/config.js";
 import type { PluginOrigin } from "../plugins/types.js";
 import { resolveUserPath } from "../utils.js";
+import { secretRefKey } from "./ref-contract.js";
 import { type SecretResolverWarning } from "./runtime-shared.js";
 import {
   clearActiveRuntimeWebToolsMetadata,
@@ -229,16 +230,52 @@ export async function prepareSecretsRuntimeSnapshot(params: {
   }
 
   if (context.assignments.length > 0) {
-    const refs = context.assignments.map((assignment) => assignment.ref);
-    const resolved = await resolveSecretRefValues(refs, {
-      config: sourceConfig,
-      env: context.env,
-      cache: context.cache,
-    });
-    applyResolvedAssignments({
-      assignments: context.assignments,
-      resolved,
-    });
+    const fatalAssignments = context.assignments.filter(
+      (assignment) => assignment.onUnavailable !== "warn",
+    );
+    const nonfatalAssignments = context.assignments.filter(
+      (assignment) => assignment.onUnavailable === "warn",
+    );
+
+    if (fatalAssignments.length > 0) {
+      const resolved = await resolveSecretRefValues(
+        fatalAssignments.map((assignment) => assignment.ref),
+        {
+          config: sourceConfig,
+          env: context.env,
+          cache: context.cache,
+        },
+      );
+      applyResolvedAssignments({
+        assignments: fatalAssignments,
+        resolved,
+        context,
+      });
+    }
+
+    if (nonfatalAssignments.length > 0) {
+      const resolved = new Map<string, unknown>();
+      for (const assignment of nonfatalAssignments) {
+        try {
+          const assignmentResolved = await resolveSecretRefValues([assignment.ref], {
+            config: sourceConfig,
+            env: context.env,
+            cache: context.cache,
+          });
+          const key = secretRefKey(assignment.ref);
+          if (assignmentResolved.has(key)) {
+            resolved.set(key, assignmentResolved.get(key));
+          }
+        } catch {
+          continue;
+        }
+      }
+      applyResolvedAssignments({
+        assignments: nonfatalAssignments,
+        resolved,
+        context,
+      });
+    }
   }
 
   const snapshot = {

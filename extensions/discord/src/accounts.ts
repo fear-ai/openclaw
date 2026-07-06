@@ -22,6 +22,10 @@ const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("di
 export const listDiscordAccountIds = listAccountIds;
 export const resolveDefaultDiscordAccountId = resolveDefaultAccountId;
 
+function isUnresolvedSecretRefError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("unresolved SecretRef");
+}
+
 export function resolveDiscordAccountConfig(
   cfg: OpenClawConfig,
   accountId: string,
@@ -66,7 +70,16 @@ export function resolveDiscordAccount(params: {
   const merged = mergeDiscordAccountConfig(params.cfg, accountId);
   const accountEnabled = merged.enabled !== false;
   const enabled = baseEnabled && accountEnabled;
-  const tokenResolution = resolveDiscordToken(params.cfg, { accountId });
+  let tokenResolution: ReturnType<typeof resolveDiscordToken>;
+  try {
+    tokenResolution = resolveDiscordToken(params.cfg, { accountId });
+  } catch (error) {
+    if (isUnresolvedSecretRefError(error)) {
+      tokenResolution = { token: "", source: "none" };
+    } else {
+      throw error;
+    }
+  }
   return {
     accountId,
     enabled,

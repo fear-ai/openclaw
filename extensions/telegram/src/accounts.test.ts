@@ -107,6 +107,23 @@ describe("resolveTelegramAccount", () => {
     expect(account.token).toBe("");
   });
 
+  it("treats unresolved SecretRef bot tokens as unavailable instead of throwing", () => {
+    const account = resolveAccountWithEnv({ TELEGRAM_BOT_TOKEN: "" }, {
+      channels: {
+        telegram: {
+          botToken: {
+            source: "file",
+            provider: "default",
+            id: "/channels/telegram/botToken",
+          },
+        },
+      },
+    } as unknown as OpenClawConfig);
+
+    expect(account.token).toBe("");
+    expect(account.tokenSource).toBe("none");
+  });
+
   it("formats debug logs with inspect-style output when debug env is enabled", () => {
     withEnv({ TELEGRAM_BOT_TOKEN: "", OPENCLAW_DEBUG_TELEGRAM_ACCOUNTS: "1" }, () => {
       const cfg: OpenClawConfig = {

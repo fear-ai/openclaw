@@ -1,3 +1,4 @@
+import type { OpenClawConfig } from "openclaw/plugin-sdk/account-resolution";
 import { describe, expect, it } from "vitest";
 import { resolveSlackAccount } from "./accounts.js";
 
@@ -105,5 +106,24 @@ describe("resolveSlackAccount allowFrom precedence", () => {
 
     expect(resolved.config.allowFrom).toBeUndefined();
     expect(resolved.config.dm?.allowFrom).toEqual(["U123"]);
+  });
+
+  it("treats unresolved SecretRef tokens as unavailable instead of throwing", () => {
+    const cfg = {
+      channels: {
+        slack: {
+          botToken: { source: "file", provider: "default", id: "/channels/slack/botToken" },
+          appToken: { source: "file", provider: "default", id: "/channels/slack/appToken" },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    const resolved = resolveSlackAccount({
+      cfg,
+    });
+
+    expect(resolved.botToken).toBeUndefined();
+    expect(resolved.appToken).toBeUndefined();
+    expect(resolved.botTokenSource).toBe("none");
+    expect(resolved.appTokenSource).toBe("none");
   });
 });

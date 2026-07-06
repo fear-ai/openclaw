@@ -123,6 +123,7 @@ export function collectSimpleChannelFieldAssignments(params: {
     context: params.context,
     active: isBaseFieldActiveForChannelSurface(params.surface, params.field),
     inactiveReason: params.topInactiveReason,
+    onUnavailable: "warn",
     apply: (value) => {
       params.channel[params.field] = value;
     },
@@ -142,6 +143,7 @@ export function collectSimpleChannelFieldAssignments(params: {
       context: params.context,
       active: enabled,
       inactiveReason: params.accountInactiveReason,
+      onUnavailable: "warn",
       apply: (value) => {
         account[params.field] = value;
       },
@@ -188,6 +190,7 @@ export function collectConditionalChannelFieldAssignments(params: {
       inheritedAccountActive: params.topLevelInheritedAccountActive,
     }),
     inactiveReason: params.topInactiveReason,
+    onUnavailable: "warn",
     apply: (value) => {
       params.channel[params.field] = value;
     },
@@ -210,6 +213,7 @@ export function collectConditionalChannelFieldAssignments(params: {
         typeof params.accountInactiveReason === "function"
           ? params.accountInactiveReason(entry)
           : params.accountInactiveReason,
+      onUnavailable: "warn",
       apply: (value) => {
         entry.account[params.field] = value;
       },
@@ -240,6 +244,7 @@ export function collectNestedChannelFieldAssignments(params: {
       context: params.context,
       active: params.topLevelActive,
       inactiveReason: params.topInactiveReason,
+      onUnavailable: "warn",
       apply: (value) => {
         topLevelNested[params.field] = value;
       },
@@ -264,6 +269,7 @@ export function collectNestedChannelFieldAssignments(params: {
         typeof params.accountInactiveReason === "function"
           ? params.accountInactiveReason(entry)
           : params.accountInactiveReason,
+      onUnavailable: "warn",
       apply: (value) => {
         nested[params.field] = value;
       },

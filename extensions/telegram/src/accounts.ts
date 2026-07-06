@@ -210,11 +210,22 @@ export function resolveTelegramAccount(params: {
 }): ResolvedTelegramAccount {
   const baseEnabled = params.cfg.channels?.telegram?.enabled !== false;
 
+  const resolveTokenOrNone = (accountId: string) => {
+    try {
+      return resolveTelegramToken(params.cfg, { accountId });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("unresolved SecretRef")) {
+        return { token: "", source: "none" as const };
+      }
+      throw error;
+    }
+  };
+
   const resolve = (accountId: string) => {
     const merged = mergeTelegramAccountConfig(params.cfg, accountId);
     const accountEnabled = merged.enabled !== false;
     const enabled = baseEnabled && accountEnabled;
-    const tokenResolution = resolveTelegramToken(params.cfg, { accountId });
+    const tokenResolution = resolveTokenOrNone(accountId);
     debugAccounts("resolve", {
       accountId,
       enabled,
