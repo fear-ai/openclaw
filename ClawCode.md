@@ -134,9 +134,10 @@ Relevant file:
 - local archival material also includes export-style per-account token JSON files plus older raw `gogcli_*.json` token files;
 - installed `gog` CLI syntax last verified here is:
   - `gog auth credentials set <credentials.json>`
-  - `gog auth add <email> --services gmail --readonly`
+  - `gog auth add <email> --services gmail --gmail-scope readonly`
   - `gog auth tokens export <email> --out <file>`
   - `gog auth tokens import <file>`
+  - browser OAuth was revalidated locally with `alphaeosnet@gmail.com` using the Gmail read-only scope
 
 Practical implication:
 
@@ -156,12 +157,21 @@ Practical implication:
 - `scripts/release-status.ts` reads tags from the official upstream repo and combines them with npm publish times
 - `src/cli/update-cli.ts` treats `openclaw update` as a channel-aware source or package-manager updater
 - `src/commands/status.update.ts` reports both git drift and npm drift
+- completion-cache regeneration after update can fail in the globally installed CLI if the packaged runtime does not include the QA scenario pack expected by `qa-lab`
+- observed failure shape:
+  - `Completion cache update failed ([openclaw] Failed to start CLI: Error: qa scenario pack not found: qa/scenarios/index.md)`
+- the checked-out repo does contain `qa/scenarios/index.md`; the issue is the installed package/runtime layout, not the repo checkout
+- practical consequence:
+  - this is a completion-cache and packaging/runtime issue, not a Gmail or `gog` issue
+  - for current email integration work, prefer the repo-profile runtime over the globally installed CLI when this warning is present
 
 Relevant files:
 
 - `scripts/release-status.ts`
 - `src/cli/update-cli.ts`
 - `src/commands/status.update.ts`
+- `src/cli/update-cli/shared.ts`
+- `extensions/qa-lab/src/scenario-catalog.ts`
 
 ### 4.6. ACP bridge summary
 

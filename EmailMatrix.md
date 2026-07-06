@@ -163,7 +163,7 @@ The adaptation path is therefore:
 | Config root | macOS: `~/Library/Application Support/gogcli/`; Linux: `~/.config/gogcli/` or `$XDG_CONFIG_HOME/gogcli/` | verified from `gog config path` and `internal/config/paths.go` |
 | OAuth client credentials | stored on disk as `credentials.json` for the default client or `credentials-<client>.json` for named clients | contains `client_id` and `client_secret`, not refresh tokens |
 | Refresh token storage | stored in the selected keyring backend under keys like `token:<client>:<email>` | verified by `gog auth list` and `internal/secrets/store.go` |
-| Installed auth CLI surface | `gog auth credentials set`, `gog auth add --readonly`, `gog auth tokens export`, `gog auth tokens import`, `gog auth keyring auto|keychain|file` | current installed CLI is `gog v0.9.0`; local instructions should follow this syntax rather than newer drifted examples |
+| Installed auth CLI surface | `gog auth credentials set`, `gog auth add --services gmail --gmail-scope readonly`, `gog auth tokens export`, `gog auth tokens import`, `gog auth keyring auto|keychain|file` | current local CLI was revalidated after Homebrew upgrade; the Gmail read-only path now accepts `--gmail-scope readonly` directly |
 | Default keyring mode | `auto` | current local state is `auto` |
 | Keyring backend options | `auto`, `keychain`, `file` | `file` stores encrypted entries on disk under the `keyring/` directory |
 | File-backend password source | `GOG_KEYRING_PASSWORD` | required for non-interactive file-backed runs |

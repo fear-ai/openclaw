@@ -275,11 +275,12 @@ This section captures current execution confidence, distinguishing verified beha
   - Keychain refresh-token entries are present for `alphaeosnet@gmail.com`, `moonshotcol@gmail.com`, `wallyb33@gmail.com`, and `tearodactylus@gmail.com`
   - export-style per-account token files are also present in `~/.gogcli/` with keys `client`, `email`, `created_at`, `refresh_token`, `services`, and `scopes`
   - older raw token files are also present there as `gogcli_*.json`, with `created_at`, `refresh_token`, `services`, and `scopes`
-  - installed CLI syntax last verified on `gog v0.9.0`:
+  - current CLI syntax revalidated after upgrading to a newer Homebrew `gogcli` build:
     - `gog auth credentials set <credentials.json>`
-    - `gog auth add <email> --services gmail --readonly`
+    - `gog auth add <email> --services gmail --gmail-scope readonly`
     - `gog auth tokens export <email> --out <file>`
     - `gog auth tokens import <file>`
+  - `gog auth add alphaeosnet@gmail.com --services gmail --gmail-scope readonly` was run successfully in this workspace and completed the browser OAuth flow
 - current Himalaya and Neverest account configuration was inspected directly:
   - both define `alphaeosnet`, `moonshotcol`, `wallyb33`, and `tearodactylus`
   - both currently retrieve credentials through macOS `security find-generic-password ...` commands rather than storing secrets inline
@@ -290,6 +291,10 @@ This section captures current execution confidence, distinguishing verified beha
 - `gog auth add` failure mode was reproduced:
   - `Error 403: org_internal`
   - root cause: OAuth client/consent audience policy mismatch.
+- global OpenClaw update/runtime warning was reproduced:
+  - `Completion cache update failed ([openclaw] Failed to start CLI: Error: qa scenario pack not found: qa/scenarios/index.md)`
+  - this points to a packaged-runtime / completion-cache issue around `qa-lab`, not to Gmail or `gog`
+  - for current email integration validation, the repo-profile runtime should be preferred when the globally installed CLI shows this warning
 
 ### 8.2. Partially validated
 
@@ -1935,7 +1940,7 @@ Direct standalone `gog` validation should include:
 Installed CLI forms that should be used for setup and archival in this workspace:
 
 - `gog auth credentials set <credentials.json>`
-- `gog auth add <email> --services gmail --readonly`
+- `gog auth add <email> --services gmail --gmail-scope readonly`
 - `gog auth tokens export <email> --out <file>`
 - `gog auth tokens import <file>`
 - `gog auth keyring auto|keychain|file`

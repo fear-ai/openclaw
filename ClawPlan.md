@@ -25,6 +25,28 @@ The current intended OpenClaw environment outcome is:
 
 That target state should be treated as the base environment for the next several iterations.
 
+## Repository State
+
+The local OpenClaw source is one Git repository with two checked-out worktrees:
+
+- `/Users/walter/Work/Claw/openclaw`
+  - current branch: `codex/preserve-openclaw-april-fixes`
+  - remote: `fear-ai/openclaw`
+  - worktree clean and branch pushed
+  - four commits preserve the April work as separable changes:
+    - unavailable channel SecretRefs degrade to unconfigured channels instead of aborting gateway startup;
+    - launchd inspection preserves host `HOME` while retaining pack-specific `OPENCLAW_*` settings;
+    - chat controls use more readable default labels, responsive widths, and accessibility labels;
+    - local coding-session directories are ignored.
+- `/Users/walter/Work/Claw/openclaw-docs`
+  - current branch: `claw_emails`
+  - branch tip matches `origin/claw_emails`
+  - four files are now uncommitted: the existing `ClawCode.md`, `Email.md`, and `EmailMatrix.md` updates plus this repository-status update in `ClawPlan.md`.
+
+The preservation branch is based on `feat/mails`, so it also retains the earlier Himalaya account-syntax and richer Gmail-hook commits. It is a historical recovery branch, not evidence that the patches apply cleanly to current upstream. Validation on the retained `2026.4.9` base passed TypeScript, lint, formatting, and 113 focused tests. Current upstream has substantially changed the chat UI; treat the UI commit as historical preference, while the channel-secret and launchd fixes remain candidates for selective revalidation.
+
+`feat/more_mail` remains an older divergent variant. Its unique value is limited to `Patches.md`, ignore rules, and an old release-display change. Extract those items deliberately; do not merge the whole branch into current work.
+
 ## Active Workstreams
 
 ### 1. Docs and environment alignment
@@ -35,7 +57,8 @@ That target state should be treated as the base environment for the next several
 
 ### 2. Release intake and upstream tracking
 
-- Reconcile `origin/feat/more_mail` with the rewritten stable-based branch.
+- Extract any still-useful `Patches.md` or release-display material from `feat/more_mail`, then retire the divergent branch rather than broadly reconciling it.
+- Revalidate the preserved channel-secret and launchd fixes individually against current upstream before proposing or porting them.
 - Update the installed Homebrew lane from `2026.3.7` to current cask metadata.
 - Keep release-sensitive local implementation notes current enough to support branch and environment decisions.
 
@@ -55,6 +78,8 @@ That target state should be treated as the base environment for the next several
 - Keep the default/global listener on `18789` inactive unless deliberately reintroduced.
 - Optionally reinstall the gateway service using a stable non-nvm node path.
 - Optionally run `openclaw --profile repo doctor --repair` and review resulting service-config diffs.
+- Root `node_modules` and `dist` products were removed from both source worktrees on 2026-07-06 after confirming no process used either checkout, reclaiming about 4.1 GB. Reinstall or rebuild only for a specific revalidation task.
+- Keep `.codess` session databases until their distinct Codex records are confirmed in canonical CodeSess; the two worktrees are only partially duplicate.
 
 ### 5. Security and deployment hardening
 
@@ -153,15 +178,22 @@ That target state should be treated as the base environment for the next several
 
 ## Near-Term Sequence
 
-1. Finish the remaining OpenClaw-doc cleanup and retire the obsolete files.
-2. Push the rewritten `feat/more_mail` branch to `origin` with intentional `--force-with-lease`.
-3. Review `NemoClaw`.
-4. Review `DenchClaw`.
-5. Review `Hermes` and Honcho.
-6. Run direct standalone `gog` validation on one real account.
-7. Validate the patched OpenClaw Gmail hook path with synthetic payloads, then with real `gog gmail watch serve`.
-8. Run `himalaya` mailbox-interaction validation against one existing mirrored account.
-9. Commit to the first Maildir ingest and replay path.
+Shutdown checkpoint completed on 2026-07-06:
+
+- the April OpenClaw code was split into four commits and pushed as `codex/preserve-openclaw-april-fixes`;
+- the two worktrees' root `node_modules` and `dist` products were removed;
+- repository state, cleanup boundaries, and reference-clone status were captured in the maintained project documents.
+
+Pending work, in order:
+
+1. Protect NemoClaw's local-only `nemow13` branch through a personal fork or private bundle.
+2. Extract only still-useful `Patches.md` or release-display material from `feat/more_mail`, then retire the divergent branch.
+3. Revalidate the channel-secret and launchd fixes individually against current upstream; do not broadly rebase the historical UI patch.
+4. Review `NemoClaw`, `DenchClaw`, and `Hermes`/Honcho for specific reusable boundaries.
+5. Run direct standalone `gog` validation on one real account.
+6. Validate the richer Gmail hook path with synthetic payloads, then with real `gog gmail watch serve`.
+7. Run `himalaya` mailbox-interaction validation against one existing mirrored account.
+8. Commit to the first Maildir ingest and replay path.
 
 ## Review Order
 
