@@ -972,7 +972,7 @@ describe("chat view", () => {
     );
     expect(thinkingSelect).not.toBeNull();
     expect(thinkingSelect?.value).toBe("");
-    expect(thinkingSelect?.options[0]?.textContent?.trim()).toBe("Default (off)");
+    expect(thinkingSelect?.options[0]?.textContent?.trim()).toBe("off - default");
   });
 
   it("patches the current session thinking level from the chat header picker", async () => {

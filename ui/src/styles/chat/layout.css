@@ -762,8 +762,9 @@
 }
 
 .chat-controls__session {
-  min-width: 98px;
-  max-width: 190px;
+  width: min(22ch, 20vw);
+  min-width: 16ch;
+  max-width: 100%;
 }
 
 .chat-controls__session-row {
@@ -774,13 +775,15 @@
 }
 
 .chat-controls__model {
-  min-width: 124px;
-  max-width: 206px;
+  width: min(22ch, 20vw);
+  min-width: 16ch;
+  max-width: 100%;
 }
 
 .chat-controls__thinking-select {
-  min-width: 88px;
-  max-width: 118px;
+  width: min(16ch, 14vw);
+  min-width: 12ch;
+  max-width: 100%;
 }
 
 .chat-controls__thinking {
@@ -805,17 +808,18 @@
 .chat-controls__session select {
   padding: 6px 10px;
   font-size: 13px;
-  max-width: 190px;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .chat-controls__model select {
-  max-width: 206px;
+  max-width: 100%;
 }
 
 .chat-controls__thinking-select select {
-  max-width: 118px;
+  max-width: 100%;
 }
 
 .chat-controls__thinking {

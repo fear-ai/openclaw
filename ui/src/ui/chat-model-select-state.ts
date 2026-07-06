@@ -100,7 +100,7 @@ export function resolveChatModelSelectState(
     currentOverride,
     defaultModel,
     defaultDisplay,
-    defaultLabel: defaultModel ? `Default (${defaultDisplay})` : "Default model",
+    defaultLabel: defaultModel ? `${defaultDisplay} - default` : "Default model",
     options: buildChatModelOptions(state.chatModelCatalog ?? [], currentOverride, defaultModel),
   };
 }

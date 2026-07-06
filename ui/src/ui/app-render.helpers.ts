@@ -197,6 +197,19 @@ export function renderChatControls(state: AppViewState) {
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const showToolCalls = state.onboarding ? true : state.settings.chatShowToolCalls;
   const focusActive = state.onboarding ? true : state.settings.chatFocusMode;
+  const refreshTitle = t("chat.refreshTitle");
+  const thinkingTitle = disableThinkingToggle
+    ? t("chat.onboardingDisabled")
+    : t("chat.thinkingToggle");
+  const toolCallsTitle = disableThinkingToggle
+    ? t("chat.onboardingDisabled")
+    : t("chat.toolCallsToggle");
+  const focusTitle = disableFocusToggle ? t("chat.onboardingDisabled") : t("chat.focusToggle");
+  const cronTitle = hideCron
+    ? hiddenCronCount > 0
+      ? t("chat.showCronSessionsHidden", { count: String(hiddenCronCount) })
+      : t("chat.showCronSessions")
+    : t("chat.hideCronSessions");
   const toolCallsIcon = html`
     <svg
       width="18"
@@ -269,7 +282,8 @@ export function renderChatControls(state: AppViewState) {
             });
           }
         }}
-        title=${t("chat.refreshTitle")}
+        title=${refreshTitle}
+        aria-label=${refreshTitle}
       >
         ${refreshIcon}
       </button>
@@ -287,7 +301,8 @@ export function renderChatControls(state: AppViewState) {
           });
         }}
         aria-pressed=${showThinking}
-        title=${disableThinkingToggle ? t("chat.onboardingDisabled") : t("chat.thinkingToggle")}
+        title=${thinkingTitle}
+        aria-label=${thinkingTitle}
       >
         ${icons.brain}
       </button>
@@ -304,7 +319,8 @@ export function renderChatControls(state: AppViewState) {
           });
         }}
         aria-pressed=${showToolCalls}
-        title=${disableThinkingToggle ? t("chat.onboardingDisabled") : t("chat.toolCallsToggle")}
+        title=${toolCallsTitle}
+        aria-label=${toolCallsTitle}
       >
         ${toolCallsIcon}
       </button>
@@ -321,7 +337,8 @@ export function renderChatControls(state: AppViewState) {
           });
         }}
         aria-pressed=${focusActive}
-        title=${disableFocusToggle ? t("chat.onboardingDisabled") : t("chat.focusToggle")}
+        title=${focusTitle}
+        aria-label=${focusTitle}
       >
         ${focusIcon}
       </button>
@@ -331,11 +348,8 @@ export function renderChatControls(state: AppViewState) {
           state.sessionsHideCron = !hideCron;
         }}
         aria-pressed=${hideCron}
-        title=${hideCron
-          ? hiddenCronCount > 0
-            ? t("chat.showCronSessionsHidden", { count: String(hiddenCronCount) })
-            : t("chat.showCronSessions")
-          : t("chat.hideCronSessions")}
+        title=${cronTitle}
+        aria-label=${cronTitle}
       >
         ${renderCronFilterIcon(hiddenCronCount)}
       </button>
@@ -650,7 +664,7 @@ function resolveChatThinkingSelectState(state: AppViewState): ChatThinkingSelect
       : "off";
   return {
     currentOverride,
-    defaultLabel: `Default (${defaultLevel})`,
+    defaultLabel: `${defaultLevel} - default`,
     options: buildThinkingOptions(provider, model, currentOverride),
   };
 }
